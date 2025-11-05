@@ -1051,11 +1051,14 @@ Tip: You can rename images before adding them, or use the filename as-is if it a
             
             key_info_content.append(Spacer(1, 15))
             
-            # Property image (reduced size to fit on page)
+            # Property image (reduced size to fit on page) - always show, use placeholder if missing
+            img_width = 6.5*inch
+            img_height = 3.5*inch
+            main_img_path = None
+            
             if self.images:
                 try:
                     # Find exterior front image or use first image
-                    main_img_path = None
                     for img_path in self.images:
                         filename = os.path.basename(img_path).lower()
                         if 'exterior' in filename and 'front' in filename:
@@ -1064,20 +1067,34 @@ Tip: You can rename images before adding them, or use the filename as-is if it a
                     if not main_img_path:
                         main_img_path = self.images[0]
                     
-                    # Display image (reduced size to fit on one page)
-                    property_img_pil = Image.open(main_img_path)
-                    img_aspect = property_img_pil.width / property_img_pil.height
-                    img_width = 6.5*inch  # Slightly smaller to fit
-                    img_height = img_width / img_aspect
-                    # Limit height to ensure it fits
-                    if img_height > 3.5*inch:
-                        img_height = 3.5*inch
-                        img_width = img_height * img_aspect
-                    property_img = RLImage(main_img_path, width=img_width, height=img_height)
-                    key_info_content.append(property_img)
+                    if main_img_path and os.path.exists(main_img_path):
+                        # Display image (reduced size to fit on one page)
+                        property_img_pil = Image.open(main_img_path)
+                        img_aspect = property_img_pil.width / property_img_pil.height
+                        img_width = 6.5*inch  # Slightly smaller to fit
+                        img_height = img_width / img_aspect
+                        # Limit height to ensure it fits
+                        if img_height > 3.5*inch:
+                            img_height = 3.5*inch
+                            img_width = img_height * img_aspect
+                        property_img = RLImage(main_img_path, width=img_width, height=img_height)
+                        key_info_content.append(property_img)
+                    else:
+                        # Use placeholder
+                        placeholder = create_placeholder_drawing(img_width, img_height)
+                        key_info_content.append(placeholder)
                     key_info_content.append(Spacer(1, 15))
                 except Exception as e:
                     print(f"Error loading property image: {e}")
+                    # Use placeholder on error
+                    placeholder = create_placeholder_drawing(img_width, img_height)
+                    key_info_content.append(placeholder)
+                    key_info_content.append(Spacer(1, 15))
+            else:
+                # No images - use placeholder
+                placeholder = create_placeholder_drawing(img_width, img_height)
+                key_info_content.append(placeholder)
+                key_info_content.append(Spacer(1, 15))
             
             # Property Metrics - Four metrics displayed horizontally (label above value)
             asking_price = data.get('asking_price', 'N/A')
@@ -1170,11 +1187,14 @@ Tip: You can rename images before adding them, or use the filename as-is if it a
             
             story.append(Spacer(1, 20))
             
-            # Large Property Image below header
+            # Large Property Image below header - always show, use placeholder if missing
+            img_width = 7*inch
+            img_height = 3.5*inch
+            main_img_path = None
+            
             if self.images:
                 try:
                     # Find exterior front image or use first image
-                    main_img_path = None
                     for img_path in self.images:
                         filename = os.path.basename(img_path).lower()
                         if 'exterior' in filename and 'front' in filename:
@@ -1183,20 +1203,34 @@ Tip: You can rename images before adding them, or use the filename as-is if it a
                     if not main_img_path:
                         main_img_path = self.images[0]
                     
-                    # Display large image
-                    property_img_pil = Image.open(main_img_path)
-                    img_aspect = property_img_pil.width / property_img_pil.height
-                    img_width = 7*inch  # Full width
-                    img_height = img_width / img_aspect
-                    # Limit height to ensure it fits nicely
-                    if img_height > 3.5*inch:
-                        img_height = 3.5*inch
-                        img_width = img_height * img_aspect
-                    property_img = RLImage(main_img_path, width=img_width, height=img_height)
-                    story.append(property_img)
+                    if main_img_path and os.path.exists(main_img_path):
+                        # Display large image
+                        property_img_pil = Image.open(main_img_path)
+                        img_aspect = property_img_pil.width / property_img_pil.height
+                        img_width = 7*inch  # Full width
+                        img_height = img_width / img_aspect
+                        # Limit height to ensure it fits nicely
+                        if img_height > 3.5*inch:
+                            img_height = 3.5*inch
+                            img_width = img_height * img_aspect
+                        property_img = RLImage(main_img_path, width=img_width, height=img_height)
+                        story.append(property_img)
+                    else:
+                        # Use placeholder
+                        placeholder = create_placeholder_drawing(img_width, img_height)
+                        story.append(placeholder)
                     story.append(Spacer(1, 20))
                 except Exception as e:
                     print(f"Error loading property image: {e}")
+                    # Use placeholder on error
+                    placeholder = create_placeholder_drawing(img_width, img_height)
+                    story.append(placeholder)
+                    story.append(Spacer(1, 20))
+            else:
+                # No images - use placeholder
+                placeholder = create_placeholder_drawing(img_width, img_height)
+                story.append(placeholder)
+                story.append(Spacer(1, 20))
             
             # EPC Section - Horizontal Layout: Title (left) | Chart (middle) | Details (right)
             epc_title_para = Paragraph("Energy Performance Certificate", 
@@ -1281,43 +1315,69 @@ Tip: You can rename images before adding them, or use the filename as-is if it a
                 story.append(broadband_table)
                 story.append(Spacer(1, 20))
             
-            # Floor Plans Section
+            # Floor Plans Section - always show at least one placeholder if no floor plans
+            floor_plan_images = []
             if self.images:
                 # Filter floor plan images
-                floor_plan_images = []
                 for img_path in self.images:
                     filename = os.path.basename(img_path).lower()
                     if 'floor' in filename or 'plan' in filename:
                         floor_plan_images.append(img_path)
-                
-                if floor_plan_images:
-                    for i, image_path in enumerate(floor_plan_images):
-                        # Each floor plan gets its own page
-                        story.append(PageBreak())
+            
+            # Always show at least one floor plan (placeholder if none available)
+            if not floor_plan_images:
+                floor_plan_images = [None]  # Use None as placeholder marker
+            
+            if floor_plan_images:
+                for i, image_path in enumerate(floor_plan_images):
+                    # Each floor plan gets its own page
+                    story.append(PageBreak())
+                    
+                    if image_path is None:
+                        # Use placeholder
+                        img_width = 6.5*inch
+                        img_height = 4.5*inch
+                        placeholder = create_placeholder_drawing(img_width, img_height)
                         
+                        # Center vertically
+                        available_height = 10*inch
+                        remaining_height = available_height - img_height
+                        top_spacer = remaining_height / 2
+                        if top_spacer > 0:
+                            story.append(Spacer(1, top_spacer))
+                        
+                        # Center horizontally
+                        center_table = Table([[placeholder]], colWidths=[7.5*inch])
+                        center_table.setStyle(TableStyle([
+                            ('ALIGN', (0, 0), (0, 0), 'CENTER'),
+                            ('VALIGN', (0, 0), (0, 0), 'MIDDLE'),
+                        ]))
+                        story.append(center_table)
+                    else:
                         try:
                             # Load image to get dimensions
-                            img_pil = Image.open(image_path)
-                            img_aspect = img_pil.width / img_pil.height
-                            
-                            # Display floor plan images - larger size for better visibility
-                            img_width = 6.5*inch
-                            img_height = img_width / img_aspect
-                            
-                            # Limit height to ensure it fits on page
-                            if img_height > 4.5*inch:
+                            if os.path.exists(image_path):
+                                img_pil = Image.open(image_path)
+                                img_aspect = img_pil.width / img_pil.height
+                                
+                                # Display floor plan images - larger size for better visibility
+                                img_width = 6.5*inch
+                                img_height = img_width / img_aspect
+                                
+                                # Limit height to ensure it fits on page
+                                if img_height > 4.5*inch:
+                                    img_height = 4.5*inch
+                                    img_width = img_height * img_aspect
+                                
+                                img = RLImage(image_path, width=img_width, height=img_height)
+                            else:
+                                # Use placeholder if file doesn't exist
+                                img_width = 6.5*inch
                                 img_height = 4.5*inch
-                                img_width = img_height * img_aspect
-                            
-                            img = RLImage(image_path, width=img_width, height=img_height)
+                                img = create_placeholder_drawing(img_width, img_height)
                             
                             # Center the image on the page
-                            # A4 page height is 11.69 inches, with margins (0.75 inch each) = 10.19 inches usable
-                            # For simpler calculation, use approximately 10 inches usable space
                             available_height = 10*inch
-                            
-                            # Calculate vertical centering
-                            # Position image in the middle of available space
                             remaining_height = available_height - img_height
                             top_spacer = remaining_height / 2
                             
@@ -1335,6 +1395,21 @@ Tip: You can rename images before adding them, or use the filename as-is if it a
                             
                         except Exception as e:
                             print(f"Error adding floor plan image {image_path}: {e}")
+                            # Use placeholder on error
+                            img_width = 6.5*inch
+                            img_height = 4.5*inch
+                            placeholder = create_placeholder_drawing(img_width, img_height)
+                            available_height = 10*inch
+                            remaining_height = available_height - img_height
+                            top_spacer = remaining_height / 2
+                            if top_spacer > 0:
+                                story.append(Spacer(1, top_spacer))
+                            center_table = Table([[placeholder]], colWidths=[7.5*inch])
+                            center_table.setStyle(TableStyle([
+                                ('ALIGN', (0, 0), (0, 0), 'CENTER'),
+                                ('VALIGN', (0, 0), (0, 0), 'MIDDLE'),
+                            ]))
+                            story.append(center_table)
             
             # Property Images (excluding floor plans, directions, and Liverpool images)
             # Always show at least one placeholder if no images
@@ -1449,7 +1524,8 @@ Tip: You can rename images before adding them, or use the filename as-is if it a
                         directions_image_path = path
                         break
             
-            if directions_image_path:
+            # Always show directions image (placeholder if not found)
+            if directions_image_path and os.path.exists(directions_image_path):
                 try:
                     # Load image to get dimensions
                     img_pil = Image.open(directions_image_path)
@@ -1468,9 +1544,13 @@ Tip: You can rename images before adding them, or use the filename as-is if it a
                     story.append(directions_img)
                 except Exception as e:
                     print(f"Error loading directions image: {e}")
+                    # Use placeholder on error
+                    placeholder = create_placeholder_drawing(7*inch, 4.5*inch)
+                    story.append(placeholder)
             else:
-                # Fallback: show message if no directions image found
-                story.append(Paragraph("Directions image not found", body_style))
+                # Use placeholder if not found
+                placeholder = create_placeholder_drawing(7*inch, 4.5*inch)
+                story.append(placeholder)
             
             story.append(Spacer(1, 15))
             
@@ -1501,48 +1581,49 @@ Tip: You can rename images before adding them, or use the filename as-is if it a
                     if os.path.exists(path):
                         liverpool_images.append(path)
             
-            if liverpool_images:
-                story.append(Spacer(1, 10))
-                # Display Liverpool images in a row (3 images side by side) - all same width and height
-                if len(liverpool_images) >= 3:
-                    # Fixed dimensions for all images
-                    fixed_width = 2.3*inch
-                    fixed_height = 2.3*inch  # Same as width for square images
-                    
-                    # Create table with 3 images
-                    img_cells = []
-                    for img_path in liverpool_images[:3]:
-                        try:
+            # Always show Liverpool images (placeholders if not found)
+            story.append(Spacer(1, 10))
+            fixed_width = 2.3*inch
+            fixed_height = 2.3*inch
+            
+            # Always show 3 Liverpool images (placeholders if missing)
+            while len(liverpool_images) < 3:
+                liverpool_images.append(None)
+            
+            # Display 3 images horizontally
+            img_cells = []
+            for img_path in liverpool_images[:3]:
+                if img_path is None:
+                    # Use placeholder
+                    placeholder = create_placeholder_drawing(fixed_width, fixed_height)
+                    img_cells.append(placeholder)
+                else:
+                    try:
+                        if os.path.exists(img_path):
                             # Use fixed dimensions to make them all the same size (may crop/distort to fit)
                             img = RLImage(img_path, width=fixed_width, height=fixed_height)
                             img_cells.append(img)
-                        except Exception as e:
-                            print(f"Error loading Liverpool image {img_path}: {e}")
-                            img_cells.append(Paragraph("", body_style))
-                    
-                    if len(img_cells) == 3:
-                        liverpool_table = Table([img_cells], colWidths=[fixed_width, fixed_width, fixed_width])
-                        liverpool_table.setStyle(TableStyle([
-                            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                            ('TOPPADDING', (0, 0), (-1, -1), 5),
-                            ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
-                        ]))
-                        story.append(liverpool_table)
-                else:
-                    # If less than 3 images, display them vertically with same dimensions
-                    fixed_width = 6*inch
-                    fixed_height = 4*inch
-                    for img_path in liverpool_images:
-                        try:
-                            # Use fixed dimensions to make them all the same size
-                            img = RLImage(img_path, width=fixed_width, height=fixed_height)
-                            story.append(img)
-                            story.append(Spacer(1, 10))
-                        except Exception as e:
-                            print(f"Error loading Liverpool image {img_path}: {e}")
-                
-                story.append(Spacer(1, 15))
+                        else:
+                            # Use placeholder if file doesn't exist
+                            placeholder = create_placeholder_drawing(fixed_width, fixed_height)
+                            img_cells.append(placeholder)
+                    except Exception as e:
+                        print(f"Error loading Liverpool image {img_path}: {e}")
+                        # Use placeholder on error
+                        placeholder = create_placeholder_drawing(fixed_width, fixed_height)
+                        img_cells.append(placeholder)
+            
+            if len(img_cells) == 3:
+                liverpool_table = Table([img_cells], colWidths=[fixed_width, fixed_width, fixed_width])
+                liverpool_table.setStyle(TableStyle([
+                    ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                    ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                    ('TOPPADDING', (0, 0), (-1, -1), 5),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+                ]))
+                story.append(liverpool_table)
+            
+            story.append(Spacer(1, 15))
             
             # Build PDF
             doc.build(story)
