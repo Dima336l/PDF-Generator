@@ -138,20 +138,31 @@ class CoverPageFlowable(Flowable):
         main_image_width = width
         
         # Find exterior front image (case-insensitive search)
+        # Exclude directions, map, liverpool, and floorplan images
         main_img_path = None
         main_img_index = -1
         if self.images and len(self.images) > 0:
+            # First, filter out images that shouldn't be on cover page
+            eligible_images = []
             for idx, img_path in enumerate(self.images):
+                filename = os.path.basename(img_path).lower()
+                # Exclude directions, map, liverpool, floorplan images
+                if not ('direction' in filename or 'map' in filename or 'city' in filename or 
+                        'liverpool' in filename or 'floor' in filename or 'plan' in filename):
+                    eligible_images.append((idx, img_path))
+            
+            # Search for exterior front in eligible images
+            for idx, img_path in eligible_images:
                 filename = os.path.basename(img_path).lower()
                 if 'exterior' in filename and 'front' in filename:
                     main_img_path = img_path
                     main_img_index = idx
                     break
             
-            # Fallback to first image if no exterior front found
-            if main_img_path is None:
-                main_img_path = self.images[0]
-                main_img_index = 0
+            # Fallback to first eligible image if no exterior front found
+            if main_img_path is None and eligible_images:
+                main_img_path = eligible_images[0][1]
+                main_img_index = eligible_images[0][0]
         
         # Always draw main image (use placeholder if no image available)
         try:
@@ -189,8 +200,15 @@ class CoverPageFlowable(Flowable):
         thumbnail_height = 1.5*inch
         thumbnail_width = (width - 0.4*inch) / 3  # 3 thumbnails with spacing
         
-        # Get list of images excluding the main image
-        thumbnail_images = [img for idx, img in enumerate(self.images) if idx != main_img_index]
+        # Get list of images excluding the main image and directions/map/liverpool/floorplan images
+        thumbnail_images = []
+        for idx, img in enumerate(self.images):
+            if idx != main_img_index:
+                filename = os.path.basename(img).lower()
+                # Exclude directions, map, liverpool, floorplan images from thumbnails
+                if not ('direction' in filename or 'map' in filename or 'city' in filename or 
+                        'liverpool' in filename or 'floor' in filename or 'plan' in filename):
+                    thumbnail_images.append(img)
         
         # Track the lowest point of thumbnails to add padding above footer
         lowest_thumbnail_bottom = thumbnail_bottom
