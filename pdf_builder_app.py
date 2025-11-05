@@ -1329,9 +1329,49 @@ Tip: You can rename images before adding them, or use the filename as-is if it a
                 floor_plan_images = [None]  # Use None as placeholder marker
             
             if floor_plan_images:
+                # Add Floor Plans header with logo on first page only
+                story.append(PageBreak())
+                
+                # Logo on left with "Floor Plans" title
+                logo_path = get_resource_path("logo.png")
+                if os.path.exists(logo_path):
+                    try:
+                        # Calculate logo dimensions same as first page
+                        logo_img_pil = Image.open(logo_path)
+                        logo_width = 1.5*inch
+                        logo_height = logo_width * (logo_img_pil.height / logo_img_pil.width)
+                        logo_img = RLImage(logo_path, width=logo_width, height=logo_height)
+                        
+                        # Create header table with logo on left and title on right
+                        floor_plans_title_para = Paragraph("Floor Plans", 
+                            ParagraphStyle('FloorPlansTitle', parent=styles['Heading1'], fontSize=24, 
+                                          textColor=colors.black, fontName='Helvetica-Bold'))
+                        
+                        header_table = Table([[logo_img, floor_plans_title_para]], colWidths=[2*inch, 5*inch])
+                        header_table.setStyle(TableStyle([
+                            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                            ('ALIGN', (0, 0), (0, 0), 'LEFT'),
+                            ('ALIGN', (1, 0), (1, 0), 'LEFT'),
+                            ('LEFTPADDING', (0, 0), (0, 0), 0),
+                            ('RIGHTPADDING', (0, 0), (0, 0), 10),
+                            ('LEFTPADDING', (1, 0), (1, 0), 10),
+                            ('TOPPADDING', (0, 0), (-1, -1), 5),
+                            ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+                        ]))
+                        story.append(header_table)
+                        story.append(Spacer(1, 20))
+                    except Exception as e:
+                        print(f"Error loading logo: {e}")
+                        story.append(Paragraph("Floor Plans", header_style))
+                        story.append(Spacer(1, 20))
+                else:
+                    story.append(Paragraph("Floor Plans", header_style))
+                    story.append(Spacer(1, 20))
+                
                 for i, image_path in enumerate(floor_plan_images):
-                    # Each floor plan gets its own page
-                    story.append(PageBreak())
+                    # For subsequent floor plans, add page break (but not for the first one, since we already added it)
+                    if i > 0:
+                        story.append(PageBreak())
                     
                     if image_path is None:
                         # Use placeholder
@@ -1554,13 +1594,16 @@ Tip: You can rename images before adding them, or use the filename as-is if it a
             
             story.append(Spacer(1, 15))
             
+            # About the City and Liverpool Pictures - keep together on same page
+            about_city_content = []
+            
             # About the City
             if data.get('about_city'):
-                story.append(Paragraph("About the City", header_style))
-                story.append(Paragraph(f"<b>{data.get('city', 'N/A')}</b>", highlight_style))
-                story.append(Paragraph(data.get('about_city'), body_style))
-                story.append(Paragraph(f"<b>Population:</b> {data.get('population', 'N/A')}", body_style))
-                story.append(Spacer(1, 15))
+                about_city_content.append(Paragraph("About the City", header_style))
+                about_city_content.append(Paragraph(f"<b>{data.get('city', 'N/A')}</b>", highlight_style))
+                about_city_content.append(Paragraph(data.get('about_city'), body_style))
+                about_city_content.append(Paragraph(f"<b>Population:</b> {data.get('population', 'N/A')}", body_style))
+                about_city_content.append(Spacer(1, 10))
             
             # Liverpool Pictures Section
             liverpool_images = []
@@ -1582,7 +1625,6 @@ Tip: You can rename images before adding them, or use the filename as-is if it a
                         liverpool_images.append(path)
             
             # Always show Liverpool images (placeholders if not found)
-            story.append(Spacer(1, 10))
             fixed_width = 2.3*inch
             fixed_height = 2.3*inch
             
@@ -1621,9 +1663,12 @@ Tip: You can rename images before adding them, or use the filename as-is if it a
                     ('TOPPADDING', (0, 0), (-1, -1), 5),
                     ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
                 ]))
-                story.append(liverpool_table)
+                about_city_content.append(liverpool_table)
             
-            story.append(Spacer(1, 15))
+            about_city_content.append(Spacer(1, 15))
+            
+            # Wrap in KeepTogether to ensure they stay on same page
+            story.append(KeepTogether(about_city_content))
             
             # Build PDF
             doc.build(story)
