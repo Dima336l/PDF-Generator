@@ -3,7 +3,6 @@
 
 import os
 from PyInstaller.utils.hooks import collect_data_files
-from PyInstaller.building.build_main import Analysis, PYZ, EXE, COLLECT, APP
 
 # Collect all data files needed
 datas = []
@@ -66,12 +65,5 @@ coll = COLLECT(
     upx=True,
     upx_exclude=[],
     name='PropertyPDFBuilder',
-)
-
-app = APP(
-    coll,
-    name='PropertyPDFBuilder',
-    icon=None,  # Can add .icns file here if you have one
-    version=None,
 )
 
