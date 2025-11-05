@@ -96,9 +96,10 @@ jobs:
           # Move all other files to Resources
           mv dist/PropertyPDFBuilder/* dist/PropertyPDFBuilder.app/Contents/Resources/ 2>/dev/null || true
           
-          # Create Info.plist
-          cat > dist/PropertyPDFBuilder.app/Contents/Info.plist << 'INFOPLIST'
-<?xml version="1.0" encoding="UTF-8"?>
+          # Create Info.plist using Python to avoid YAML heredoc issues
+          python3 << 'PYEOF'
+import os
+plist_content = '''<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
@@ -117,8 +118,10 @@ jobs:
   <key>LSMinimumSystemVersion</key>
   <string>10.13</string>
 </dict>
-</plist>
-INFOPLIST
+</plist>'''
+with open('dist/PropertyPDFBuilder.app/Contents/Info.plist', 'w') as f:
+    f.write(plist_content)
+PYEOF
           
           # Remove the old directory
           rmdir dist/PropertyPDFBuilder 2>/dev/null || rm -rf dist/PropertyPDFBuilder
