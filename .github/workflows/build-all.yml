@@ -15,6 +15,24 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Verify required files
+      run: |
+        echo "Checking for required files..."
+        ls -la
+        if [ ! -d "sample_images" ]; then
+          echo "Warning: sample_images directory not found (optional)"
+          mkdir -p sample_images
+        else
+          echo "✓ sample_images directory found"
+        fi
+        if [ ! -f "logo.png" ]; then
+          echo "Warning: logo.png not found (optional)"
+        else
+          echo "✓ logo.png found"
+        fi
     
     - name: Set up Python
       uses: actions/setup-python@v4
@@ -57,6 +75,24 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Verify required files
+      run: |
+        echo "Checking for required files..."
+        ls -la
+        if [ ! -d "sample_images" ]; then
+          echo "Warning: sample_images directory not found (optional)"
+          mkdir -p sample_images
+        else
+          echo "✓ sample_images directory found"
+        fi
+        if [ ! -f "logo.png" ]; then
+          echo "Warning: logo.png not found (optional)"
+        else
+          echo "✓ logo.png found"
+        fi
     
     - name: Set up Python
       uses: actions/setup-python@v4
