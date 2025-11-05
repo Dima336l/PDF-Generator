@@ -1076,14 +1076,23 @@ Tip: You can rename images before adding them, or use the filename as-is if it a
             
             if self.images:
                 try:
-                    # Find exterior front image or use first image
+                    # Filter out images that shouldn't be shown here
+                    eligible_images = []
                     for img_path in self.images:
+                        filename = os.path.basename(img_path).lower()
+                        # Exclude directions, map, liverpool, floorplan images
+                        if not ('direction' in filename or 'map' in filename or 'city' in filename or 
+                                'liverpool' in filename or 'floor' in filename or 'plan' in filename):
+                            eligible_images.append(img_path)
+                    
+                    # Find exterior front image or use first eligible image
+                    for img_path in eligible_images:
                         filename = os.path.basename(img_path).lower()
                         if 'exterior' in filename and 'front' in filename:
                             main_img_path = img_path
                             break
-                    if not main_img_path:
-                        main_img_path = self.images[0]
+                    if not main_img_path and eligible_images:
+                        main_img_path = eligible_images[0]
                     
                     if main_img_path and os.path.exists(main_img_path):
                         # Display image (reduced size to fit on one page)
@@ -1212,14 +1221,23 @@ Tip: You can rename images before adding them, or use the filename as-is if it a
             
             if self.images:
                 try:
-                    # Find exterior front image or use first image
+                    # Filter out images that shouldn't be shown here
+                    eligible_images = []
                     for img_path in self.images:
+                        filename = os.path.basename(img_path).lower()
+                        # Exclude directions, map, liverpool, floorplan images
+                        if not ('direction' in filename or 'map' in filename or 'city' in filename or 
+                                'liverpool' in filename or 'floor' in filename or 'plan' in filename):
+                            eligible_images.append(img_path)
+                    
+                    # Find exterior front image or use first eligible image
+                    for img_path in eligible_images:
                         filename = os.path.basename(img_path).lower()
                         if 'exterior' in filename and 'front' in filename:
                             main_img_path = img_path
                             break
-                    if not main_img_path:
-                        main_img_path = self.images[0]
+                    if not main_img_path and eligible_images:
+                        main_img_path = eligible_images[0]
                     
                     if main_img_path and os.path.exists(main_img_path):
                         # Display large image
