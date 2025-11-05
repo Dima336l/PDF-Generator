@@ -17,14 +17,43 @@ A professional desktop application that automatically generates property PDFs wi
 ### For macOS Users:
 
 1. **Clone or download** this repository
-2. **Run the build script**:
+2. **Make the build script executable** (first time only):
+   ```bash
+   chmod +x build_macos_app.sh
+   ```
+3. **Run the build script**:
    ```bash
    ./build_macos_app.sh
    ```
-3. **Launch the app**:
+4. **Launch the app**:
    ```bash
    open dist/PropertyPDFBuilder.app
    ```
+   
+   Or double-click `dist/PropertyPDFBuilder.app` in Finder.
+
+**Note:** On first launch, macOS may show a security warning. Right-click the app and select "Open" to bypass Gatekeeper.
+
+**Creating a DMG for distribution:**
+```bash
+hdiutil create -volname "Property PDF Builder" -srcfolder dist/PropertyPDFBuilder.app -ov -format UDZO dist/PropertyPDFBuilder.dmg
+```
+
+### Automated Builds (GitHub Actions)
+
+**Build both Windows and macOS apps automatically from anywhere!**
+
+The repository includes GitHub Actions workflows that automatically build both platforms:
+
+1. **Push your code to GitHub** (if not already)
+2. **Go to Actions tab** in your GitHub repository
+3. **The workflow runs automatically** on every push to `main`
+   - Or click "Run workflow" to trigger manually
+4. **Download the artifacts** after build completes:
+   - **PropertyPDFBuilder-Windows** - Contains `PropertyPDFBuilder.exe`
+   - **PropertyPDFBuilder-macOS** - Contains `.app` bundle and `.dmg` installer
+
+**See `GITHUB_ACTIONS_SETUP.md` for detailed setup instructions.**
 
 ### For Windows Users:
 

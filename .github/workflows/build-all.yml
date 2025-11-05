@@ -1,0 +1,101 @@
+name: Build All Platforms
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:  # Allows manual trigger from Actions tab
+
+jobs:
+  build-windows:
+    name: Build Windows App
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Create virtual environment
+      run: python -m venv venv
+    
+    - name: Activate virtual environment and install dependencies
+      shell: cmd
+      run: |
+        call venv\Scripts\activate.bat
+        pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Clean previous builds
+      shell: cmd
+      run: |
+        if exist build rmdir /s /q build
+        if exist dist rmdir /s /q dist
+    
+    - name: Build Windows executable
+      shell: cmd
+      run: |
+        call venv\Scripts\activate.bat
+        pyinstaller --onefile --windowed --name PropertyPDFBuilder pdf_builder_app.py
+    
+    - name: Upload Windows executable
+      uses: actions/upload-artifact@v3
+      with:
+        name: PropertyPDFBuilder-Windows
+        path: dist/PropertyPDFBuilder.exe
+        retention-days: 30
+
+  build-macos:
+    name: Build macOS App
+    runs-on: macos-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Create virtual environment
+      run: python3 -m venv venv
+    
+    - name: Activate virtual environment and install dependencies
+      run: |
+        source venv/bin/activate
+        pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Clean previous builds
+      run: |
+        rm -rf build/
+        rm -rf dist/
+        rm -rf PropertyPDFBuilder.app
+    
+    - name: Build macOS app
+      run: |
+        source venv/bin/activate
+        pyinstaller PropertyPDFBuilder_macos.spec
+    
+    - name: Create DMG
+      run: |
+        if [ -d "dist/PropertyPDFBuilder.app" ]; then
+          hdiutil create -volname "Property PDF Builder" -srcfolder dist/PropertyPDFBuilder.app -ov -format UDZO dist/PropertyPDFBuilder.dmg || echo "DMG creation failed, but app bundle exists"
+        fi
+    
+    - name: Upload macOS app bundle
+      uses: actions/upload-artifact@v3
+      with:
+        name: PropertyPDFBuilder-macOS
+        path: |
+          dist/PropertyPDFBuilder.app
+          dist/PropertyPDFBuilder.dmg
+        retention-days: 30
+        if-no-files-found: warn
+
