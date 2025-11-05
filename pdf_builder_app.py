@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from PIL import Image, ImageTk
 import os
+import sys
 from reportlab.lib.pagesizes import A4, letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image as RLImage, Table, TableStyle, PageBreak
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -26,6 +27,25 @@ def format_date_with_ordinal(date_obj):
     else:
         suffix = {1: 'st', 2: 'nd', 3: 'rd'}.get(day % 10, 'th')
     return date_obj.strftime(f"{day}{suffix} %B %Y")
+
+def get_resource_path(relative_path):
+    """Get absolute path to resource, works for dev and for PyInstaller"""
+    try:
+        # PyInstaller creates a temp folder and stores path in _MEIPASS
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
+
+def create_placeholder_image(width, height, filename='placeholder.png'):
+    """Create a gray placeholder image"""
+    try:
+        img = Image.new('RGB', (int(width), int(height)), color=(200, 200, 200))
+        img.save(filename)
+        return filename
+    except Exception as e:
+        print(f"Error creating placeholder image: {e}")
+        return None
 
 class CoverPageFlowable(Flowable):
     """Custom flowable for cover page with absolute positioning"""
@@ -52,8 +72,8 @@ class CoverPageFlowable(Flowable):
         width = self.width
         height = self.height
         
-        # Logo at top left (if exists) - adjust Y for bottom-left origin
-        logo_path = "logo.png"
+        # Logo at top left - adjust Y for bottom-left origin
+        logo_path = get_resource_path("logo.png")
         logo_bottom = None
         if os.path.exists(logo_path):
             try:
@@ -115,7 +135,7 @@ class CoverPageFlowable(Flowable):
         # Add spacing between address and main image - reduced to push images up
         spacing_between_text_and_images = 0.1*inch  # Reduced spacing between address and main image
         
-        # Main image - find exterior front image, or use first image as fallback
+        # Main image - find exterior front image, or use first image as fallback, or use placeholder
         # Position main image below the address with spacing
         main_image_height = 4.5*inch
         main_image_bottom = address_bottom - spacing_between_text_and_images - main_image_height
@@ -137,8 +157,9 @@ class CoverPageFlowable(Flowable):
                 main_img_path = self.images[0]
                 main_img_index = 0
         
-        if main_img_path:
-            try:
+        # Always draw main image (use placeholder if no image available)
+        try:
+            if main_img_path and os.path.exists(main_img_path):
                 main_img = Image.open(main_img_path)
                 # Calculate dimensions to fit while maintaining aspect ratio
                 img_ratio = main_img.width / main_img.height
@@ -157,9 +178,15 @@ class CoverPageFlowable(Flowable):
                 x_offset = (main_image_width - draw_width) / 2
                 canvas.drawImage(main_img_path, x_offset, main_image_bottom, 
                                width=draw_width, height=draw_height, preserveAspectRatio=True)
-                    
-            except Exception as e:
-                print(f"Error adding main image: {e}")
+            else:
+                # Draw gray placeholder rectangle
+                canvas.setFillColor(HexColor('#CCCCCC'))
+                canvas.rect(0, main_image_bottom, main_image_width, main_image_height, fill=1, stroke=0)
+        except Exception as e:
+            print(f"Error adding main image: {e}")
+            # Draw gray placeholder rectangle on error
+            canvas.setFillColor(HexColor('#CCCCCC'))
+            canvas.rect(0, main_image_bottom, main_image_width, main_image_height, fill=1, stroke=0)
         
         # Three thumbnail images below main image (exclude the main image)
         thumbnail_bottom = main_image_bottom - 2*inch
@@ -172,19 +199,34 @@ class CoverPageFlowable(Flowable):
         # Track the lowest point of thumbnails to add padding above footer
         lowest_thumbnail_bottom = thumbnail_bottom
         
-        for i in range(min(3, len(thumbnail_images))):
-            try:
-                thumb_img_path = thumbnail_images[i]
-                thumb_x = i * (thumbnail_width + 0.2*inch)
-                # All thumbnails use the same fixed size (same rectangle height and width)
-                thumb_y_position = thumbnail_bottom
-                canvas.drawImage(thumb_img_path, thumb_x, thumb_y_position,
-                               width=thumbnail_width, height=thumbnail_height, preserveAspectRatio=False)
-                
-                # All thumbnails have the same bottom position
-                lowest_thumbnail_bottom = thumbnail_bottom
-            except Exception as e:
-                print(f"Error adding thumbnail {i+1}: {e}")
+        # Always show 3 thumbnails (use placeholders if not enough images)
+        for i in range(3):
+            thumb_x = i * (thumbnail_width + 0.2*inch)
+            thumb_y_position = thumbnail_bottom
+            
+            if i < len(thumbnail_images):
+                # Use actual image
+                try:
+                    thumb_img_path = thumbnail_images[i]
+                    if os.path.exists(thumb_img_path):
+                        canvas.drawImage(thumb_img_path, thumb_x, thumb_y_position,
+                                       width=thumbnail_width, height=thumbnail_height, preserveAspectRatio=False)
+                    else:
+                        # Draw gray placeholder
+                        canvas.setFillColor(HexColor('#CCCCCC'))
+                        canvas.rect(thumb_x, thumb_y_position, thumbnail_width, thumbnail_height, fill=1, stroke=0)
+                except Exception as e:
+                    print(f"Error adding thumbnail {i+1}: {e}")
+                    # Draw gray placeholder on error
+                    canvas.setFillColor(HexColor('#CCCCCC'))
+                    canvas.rect(thumb_x, thumb_y_position, thumbnail_width, thumbnail_height, fill=1, stroke=0)
+            else:
+                # Draw gray placeholder for missing thumbnails
+                canvas.setFillColor(HexColor('#CCCCCC'))
+                canvas.rect(thumb_x, thumb_y_position, thumbnail_width, thumbnail_height, fill=1, stroke=0)
+            
+            # All thumbnails have the same bottom position
+            lowest_thumbnail_bottom = thumbnail_bottom
         
         # Footer bar with gold background - fixed at the bottom of the page
         footer_height = 0.4*inch
@@ -515,7 +557,7 @@ Tip: You can rename images before adding them, or use the filename as-is if it a
             
     def load_sample_images(self):
         """Load sample images from the sample_images folder"""
-        sample_folder = "sample_images"
+        sample_folder = get_resource_path("sample_images")
         if os.path.exists(sample_folder):
             self.load_images_from_folder(sample_folder)
         else:
@@ -728,7 +770,7 @@ Tip: You can rename images before adding them, or use the filename as-is if it a
             
             # Investment Opportunity Section - Second Page Design
             # Logo on left with title next to it
-            logo_path = "logo.png"
+            logo_path = get_resource_path("logo.png")
             if os.path.exists(logo_path):
                 try:
                     # Calculate logo dimensions same as first page
@@ -979,7 +1021,7 @@ Tip: You can rename images before adding them, or use the filename as-is if it a
             key_info_content = []
             
             # Logo on left with "Key Information" title
-            logo_path = "logo.png"
+            logo_path = get_resource_path("logo.png")
             if os.path.exists(logo_path):
                 try:
                     # Calculate logo dimensions same as first page
@@ -1098,7 +1140,7 @@ Tip: You can rename images before adding them, or use the filename as-is if it a
             story.append(PageBreak())
             
             # Other Key Information Page Header
-            logo_path = "logo.png"
+            logo_path = get_resource_path("logo.png")
             if os.path.exists(logo_path):
                 try:
                     logo_img_pil = Image.open(logo_path)
@@ -1310,31 +1352,31 @@ Tip: You can rename images before adding them, or use the filename as-is if it a
                         regular_images.append(img_path)
                 
                 if regular_images:
-                    story.append(PageBreak())
-                    story.append(Paragraph("Property Images", header_style))
-                    
+                story.append(PageBreak())
+                story.append(Paragraph("Property Images", header_style))
+                
                     for i, image_path in enumerate(regular_images):
-                        try:
-                            # Add image with caption
-                            img = RLImage(image_path, width=6*inch, height=4*inch)
-                            story.append(img)
-                            story.append(Spacer(1, 12))
-                            
-                            # Add caption
-                            filename = os.path.basename(image_path)
-                            story.append(Paragraph(f"Image {i+1}: {filename}", body_style))
-                            story.append(Spacer(1, 20))
-                            
-                        except Exception as e:
-                            print(f"Error adding image {image_path}: {e}")
-                            story.append(Paragraph(f"Image {i+1}: Error loading image", body_style))
-                            story.append(Spacer(1, 20))
+                    try:
+                        # Add image with caption
+                        img = RLImage(image_path, width=6*inch, height=4*inch)
+                        story.append(img)
+                        story.append(Spacer(1, 12))
+                        
+                        # Add caption
+                        filename = os.path.basename(image_path)
+                        story.append(Paragraph(f"Image {i+1}: {filename}", body_style))
+                        story.append(Spacer(1, 20))
+                        
+                    except Exception as e:
+                        print(f"Error adding image {image_path}: {e}")
+                        story.append(Paragraph(f"Image {i+1}: Error loading image", body_style))
+                        story.append(Spacer(1, 20))
             
             # Getting To The City Centre and About the City (Last Page)
             story.append(PageBreak())
             
             # Location Information - Logo, Title, and Directions Image
-            logo_path = "logo.png"
+            logo_path = get_resource_path("logo.png")
             if os.path.exists(logo_path):
                 try:
                     logo_img_pil = Image.open(logo_path)
@@ -1380,10 +1422,10 @@ Tip: You can rename images before adding them, or use the filename as-is if it a
             # If not found in images list, check sample_images folder
             if not directions_image_path:
                 sample_paths = [
-                    "sample_images/directions.png",
-                    "directions.png",
-                    "sample_images/directions.jpg",
-                    "directions.jpg"
+                    get_resource_path("sample_images/directions.png"),
+                    get_resource_path("directions.png"),
+                    get_resource_path("sample_images/directions.jpg"),
+                    get_resource_path("directions.jpg")
                 ]
                 for path in sample_paths:
                     if os.path.exists(path):
@@ -1434,9 +1476,9 @@ Tip: You can rename images before adding them, or use the filename as-is if it a
             # If not found in images list, check sample_images folder
             if not liverpool_images:
                 sample_paths = [
-                    "sample_images/liverpool1.jpg",
-                    "sample_images/liverpool2.jpg",
-                    "sample_images/liverpool3.jpg"
+                    get_resource_path("sample_images/liverpool1.jpg"),
+                    get_resource_path("sample_images/liverpool2.jpg"),
+                    get_resource_path("sample_images/liverpool3.jpg")
                 ]
                 for path in sample_paths:
                     if os.path.exists(path):
@@ -1494,11 +1536,10 @@ Tip: You can rename images before adding them, or use the filename as-is if it a
             
     def create_cover_page(self, data, accent_gold, primary_blue):
         """Create the cover page with logo, property address, main image, thumbnails, and footer"""
-        if not self.images:
-            return None  # Skip cover page if no images
-        
-        return CoverPageFlowable(data, self.images, accent_gold, primary_blue)
-    
+        # Always create cover page, even if no images (will use placeholders)
+        images = self.images if self.images else []
+        return CoverPageFlowable(data, images, accent_gold, primary_blue)
+            
     def create_header(self, data, accent_gold, primary_blue):
         """Create a professional header with branding"""
         header_drawing = Drawing(7.5*inch, 1.5*inch)

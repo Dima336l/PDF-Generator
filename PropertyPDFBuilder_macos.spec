@@ -7,16 +7,14 @@ from PyInstaller.utils.hooks import collect_data_files
 # Collect all data files needed
 datas = []
 
-# Include logo.png if it exists
-if os.path.exists('logo.png'):
-    datas.append(('logo.png', '.'))
+# Include logo.png - required!
+if not os.path.exists('logo.png'):
+    raise FileNotFoundError("logo.png is required but not found! Please ensure logo.png exists in the project root.")
+datas.append(('logo.png', '.'))
 
-# Include sample_images directory if it exists (optional - app works without it)
-try:
-    if os.path.exists('sample_images') and os.path.isdir('sample_images'):
-        datas.append(('sample_images', 'sample_images'))
-except Exception:
-    pass  # sample_images is optional
+# Include sample_images directory - always include if it exists
+if os.path.exists('sample_images') and os.path.isdir('sample_images'):
+    datas.append(('sample_images', 'sample_images'))
 
 # Collect reportlab data files
 try:
