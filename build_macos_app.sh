@@ -11,6 +11,9 @@ if [[ "$OSTYPE" != "darwin"* ]]; then
     exit 1
 fi
 
+# Make sure the script is executable
+chmod +x "$0"
+
 # Create virtual environment if it doesn't exist
 if [ ! -d "venv" ]; then
     echo "📦 Creating virtual environment..."
@@ -33,7 +36,7 @@ rm -rf PropertyPDFBuilder.app
 
 # Build the macOS app
 echo "🔨 Building macOS application..."
-pyinstaller PropertyPDFBuilder.spec
+pyinstaller PropertyPDFBuilder_macos.spec
 
 # Check if build was successful
 if [ -d "dist/PropertyPDFBuilder.app" ]; then
@@ -45,7 +48,15 @@ if [ -d "dist/PropertyPDFBuilder.app" ]; then
     echo ""
     echo "📦 To distribute:"
     echo "   - Copy dist/PropertyPDFBuilder.app to Applications folder"
-    echo "   - Or create a DMG installer"
+    echo "   - Or create a DMG installer using:"
+    echo "     hdiutil create -volname \"Property PDF Builder\" -srcfolder dist/PropertyPDFBuilder.app -ov -format UDZO dist/PropertyPDFBuilder.dmg"
+    echo ""
+    echo "⚠️  Note: macOS may show a security warning on first run."
+    echo "   Right-click the app and select 'Open' to bypass Gatekeeper."
+    echo ""
+    echo "🔐 Optional: Code sign the app for distribution (requires Apple Developer account):"
+    echo "   codesign --deep --force --verify --verbose --sign \"Developer ID Application: Your Name\" dist/PropertyPDFBuilder.app"
+    echo "   spctl --assess --verbose dist/PropertyPDFBuilder.app"
 else
     echo "❌ Build failed!"
     exit 1

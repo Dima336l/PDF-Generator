@@ -402,9 +402,27 @@ class PDFBuilderApp:
         self.images_frame = ttk.Frame(self.notebook)
         self.notebook.add(self.images_frame, text="Images")
         
+        # Instructions Section
+        instructions_frame = ttk.LabelFrame(self.images_frame, text="📋 Image Naming Guide", padding="10")
+        instructions_frame.pack(fill=tk.X, padx=10, pady=(10, 5))
+        
+        instructions_text = """Images are automatically placed based on their filename. Include these keywords in your image filenames:
+
+• Cover Page Main Image: Include "exterior" and "front" (e.g., "exterior_front.jpg")
+• Floor Plans: Include "floorplan" or "plan" (e.g., "floorplan1.png")
+• Directions Map: Include "directions", "map", or "city" (e.g., "directions.png")
+• Liverpool Pictures: Include "liverpool" (e.g., "liverpool1.jpg")
+• Property Images: Any other images will appear in the Property Images section
+
+Tip: You can rename images before adding them, or use the filename as-is if it already contains these keywords."""
+        
+        instructions_label = tk.Label(instructions_frame, text=instructions_text, 
+                                     justify=tk.LEFT, wraplength=800, font=("TkDefaultFont", 9))
+        instructions_label.pack(anchor=tk.W)
+        
         # Images Section
         images_frame = ttk.LabelFrame(self.images_frame, text="Property Images", padding="10")
-        images_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        images_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
         
         # Image listbox with scrollbar
         listbox_frame = ttk.Frame(images_frame)
@@ -427,17 +445,35 @@ class PDFBuilderApp:
         ttk.Button(button_frame, text="Move Down", command=self.move_image_down).pack(side=tk.LEFT, padx=(0, 5))
         ttk.Button(button_frame, text="Load Sample Images", command=self.load_sample_images).pack(side=tk.LEFT, padx=(10, 0))
         
+    def get_image_placement(self, filename):
+        """Determine where an image will be placed based on its filename"""
+        filename_lower = filename.lower()
+        
+        if 'exterior' in filename_lower and 'front' in filename_lower:
+            return "📸 Cover Page (Main Image)"
+        elif 'floor' in filename_lower or 'plan' in filename_lower:
+            return "📐 Floor Plans"
+        elif 'direction' in filename_lower or 'map' in filename_lower or 'city' in filename_lower:
+            return "🗺️ Directions Map"
+        elif 'liverpool' in filename_lower:
+            return "🏙️ Liverpool Pictures"
+        else:
+            return "🏠 Property Images"
+        
     def add_images(self):
         """Add images to the list"""
         file_paths = filedialog.askopenfilenames(
             title="Select Property Images",
-            filetypes=[("Image files", "*.jpg *.jpeg *.png *.gif *.bmp *.tiff")]
+            filetypes=[("Image files", "*.jpg *.jpeg *.png *.gif *.bmp *.tiff *.webp")]
         )
         
         for file_path in file_paths:
             self.images.append(file_path)
             filename = os.path.basename(file_path)
-            self.image_listbox.insert(tk.END, filename)
+            placement = self.get_image_placement(filename)
+            # Display filename with placement info
+            display_text = f"{filename} [{placement}]"
+            self.image_listbox.insert(tk.END, display_text)
             
     def remove_image(self):
         """Remove selected image from the list"""
@@ -487,7 +523,7 @@ class PDFBuilderApp:
             
     def load_images_from_folder(self, folder_path):
         """Load all images from a specified folder"""
-        image_extensions = ('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff')
+        image_extensions = ('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp')
         
         try:
             print(f"Loading images from folder: {folder_path}")
@@ -498,7 +534,9 @@ class PDFBuilderApp:
                 if filename.lower().endswith(image_extensions):
                     image_path = os.path.join(folder_path, filename)
                     self.images.append(image_path)
-                    self.image_listbox.insert(tk.END, filename)
+                    placement = self.get_image_placement(filename)
+                    display_text = f"{filename} [{placement}]"
+                    self.image_listbox.insert(tk.END, display_text)
                     print(f"Loaded image: {filename}")
                     
             print(f"Total images loaded: {len(self.images)}")

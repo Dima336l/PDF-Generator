@@ -29,7 +29,10 @@ ENV/
 # PyInstaller
 *.spec.bak
 *.manifest
-*.spec
+# Keep spec files (needed for builds)
+!PropertyPDFBuilder.spec
+!PropertyPDFBuilder_macos.spec
+!PropertyPDFBuilder_Debug.spec
 
 # IDE
 .vscode/
