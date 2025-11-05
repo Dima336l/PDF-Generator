@@ -37,15 +37,11 @@ def get_resource_path(relative_path):
         base_path = os.path.abspath(".")
     return os.path.join(base_path, relative_path)
 
-def create_placeholder_image(width, height, filename='placeholder.png'):
-    """Create a gray placeholder image"""
-    try:
-        img = Image.new('RGB', (int(width), int(height)), color=(200, 200, 200))
-        img.save(filename)
-        return filename
-    except Exception as e:
-        print(f"Error creating placeholder image: {e}")
-        return None
+def create_placeholder_drawing(width, height):
+    """Create a gray placeholder Drawing for use in PDF"""
+    placeholder = Drawing(width, height)
+    placeholder.add(Rect(0, 0, width, height, fillColor=HexColor('#CCCCCC'), strokeColor=HexColor('#CCCCCC')))
+    return placeholder
 
 class CoverPageFlowable(Flowable):
     """Custom flowable for cover page with absolute positioning"""
@@ -1341,24 +1337,41 @@ Tip: You can rename images before adding them, or use the filename as-is if it a
                             print(f"Error adding floor plan image {image_path}: {e}")
             
             # Property Images (excluding floor plans, directions, and Liverpool images)
+            # Always show at least one placeholder if no images
+            regular_images = []
             if self.images:
                 # Filter out floor plan images, directions image, and Liverpool images (they're already shown in their sections)
-                regular_images = []
                 for img_path in self.images:
                     filename = os.path.basename(img_path).lower()
                     if ('floor' not in filename and 'plan' not in filename and 
                         'direction' not in filename and 'map' not in filename and 'city' not in filename and
                         'liverpool' not in filename):
                         regular_images.append(img_path)
+            
+            # Always show property images section (with placeholder if empty)
+            if not regular_images:
+                regular_images = [None]  # Use None as placeholder marker
+            
+            if regular_images:
+                story.append(PageBreak())
+                story.append(Paragraph("Property Images", header_style))
                 
-                if regular_images:
-                    story.append(PageBreak())
-                    story.append(Paragraph("Property Images", header_style))
-                    
-                    for i, image_path in enumerate(regular_images):
+                for i, image_path in enumerate(regular_images):
+                    if image_path is None:
+                        # Use placeholder
+                        placeholder = create_placeholder_drawing(6*inch, 4*inch)
+                        story.append(placeholder)
+                        story.append(Spacer(1, 12))
+                        story.append(Paragraph(f"Image {i+1}: Placeholder", body_style))
+                        story.append(Spacer(1, 20))
+                    else:
                         try:
                             # Add image with caption
-                            img = RLImage(image_path, width=6*inch, height=4*inch)
+                            if os.path.exists(image_path):
+                                img = RLImage(image_path, width=6*inch, height=4*inch)
+                            else:
+                                # Use placeholder if file doesn't exist
+                                img = create_placeholder_drawing(6*inch, 4*inch)
                             story.append(img)
                             story.append(Spacer(1, 12))
                             
@@ -1369,6 +1382,10 @@ Tip: You can rename images before adding them, or use the filename as-is if it a
                             
                         except Exception as e:
                             print(f"Error adding image {image_path}: {e}")
+                            # Use placeholder on error
+                            placeholder = create_placeholder_drawing(6*inch, 4*inch)
+                            story.append(placeholder)
+                            story.append(Spacer(1, 12))
                             story.append(Paragraph(f"Image {i+1}: Error loading image", body_style))
                             story.append(Spacer(1, 20))
             
