@@ -3,6 +3,7 @@
 
 import os
 from PyInstaller.utils.hooks import collect_data_files
+from PyInstaller.building.build_main import Analysis, PYZ, EXE, COLLECT, APP
 
 # Collect all data files needed
 datas = []
