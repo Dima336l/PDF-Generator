@@ -96,32 +96,27 @@ jobs:
           # Move all other files to Resources
           mv dist/PropertyPDFBuilder/* dist/PropertyPDFBuilder.app/Contents/Resources/ 2>/dev/null || true
           
-          # Create Info.plist using Python to avoid YAML heredoc issues
-          python3 << 'PYEOF'
-import os
-plist_content = '''<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>CFBundleExecutable</key>
-  <string>PropertyPDFBuilder</string>
-  <key>CFBundleIdentifier</key>
-  <string>com.propertypdfbuilder.app</string>
-  <key>CFBundleName</key>
-  <string>Property PDF Builder</string>
-  <key>CFBundlePackageType</key>
-  <string>APPL</string>
-  <key>CFBundleVersion</key>
-  <string>1.0</string>
-  <key>CFBundleShortVersionString</key>
-  <string>1.0</string>
-  <key>LSMinimumSystemVersion</key>
-  <string>10.13</string>
-</dict>
-</plist>'''
-with open('dist/PropertyPDFBuilder.app/Contents/Info.plist', 'w') as f:
-    f.write(plist_content)
-PYEOF
+          # Create Info.plist using echo commands
+          echo '<?xml version="1.0" encoding="UTF-8"?>' > dist/PropertyPDFBuilder.app/Contents/Info.plist
+          echo '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">' >> dist/PropertyPDFBuilder.app/Contents/Info.plist
+          echo '<plist version="1.0">' >> dist/PropertyPDFBuilder.app/Contents/Info.plist
+          echo '<dict>' >> dist/PropertyPDFBuilder.app/Contents/Info.plist
+          echo '  <key>CFBundleExecutable</key>' >> dist/PropertyPDFBuilder.app/Contents/Info.plist
+          echo '  <string>PropertyPDFBuilder</string>' >> dist/PropertyPDFBuilder.app/Contents/Info.plist
+          echo '  <key>CFBundleIdentifier</key>' >> dist/PropertyPDFBuilder.app/Contents/Info.plist
+          echo '  <string>com.propertypdfbuilder.app</string>' >> dist/PropertyPDFBuilder.app/Contents/Info.plist
+          echo '  <key>CFBundleName</key>' >> dist/PropertyPDFBuilder.app/Contents/Info.plist
+          echo '  <string>Property PDF Builder</string>' >> dist/PropertyPDFBuilder.app/Contents/Info.plist
+          echo '  <key>CFBundlePackageType</key>' >> dist/PropertyPDFBuilder.app/Contents/Info.plist
+          echo '  <string>APPL</string>' >> dist/PropertyPDFBuilder.app/Contents/Info.plist
+          echo '  <key>CFBundleVersion</key>' >> dist/PropertyPDFBuilder.app/Contents/Info.plist
+          echo '  <string>1.0</string>' >> dist/PropertyPDFBuilder.app/Contents/Info.plist
+          echo '  <key>CFBundleShortVersionString</key>' >> dist/PropertyPDFBuilder.app/Contents/Info.plist
+          echo '  <string>1.0</string>' >> dist/PropertyPDFBuilder.app/Contents/Info.plist
+          echo '  <key>LSMinimumSystemVersion</key>' >> dist/PropertyPDFBuilder.app/Contents/Info.plist
+          echo '  <string>10.13</string>' >> dist/PropertyPDFBuilder.app/Contents/Info.plist
+          echo '</dict>' >> dist/PropertyPDFBuilder.app/Contents/Info.plist
+          echo '</plist>' >> dist/PropertyPDFBuilder.app/Contents/Info.plist
           
           # Remove the old directory
           rmdir dist/PropertyPDFBuilder 2>/dev/null || rm -rf dist/PropertyPDFBuilder
