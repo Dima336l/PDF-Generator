@@ -574,8 +574,7 @@ Tip: You can rename images before adding them, or use the filename as-is if it a
         sample_folder = get_resource_path("sample_images")
         if os.path.exists(sample_folder):
             self.load_images_from_folder(sample_folder)
-        else:
-            messagebox.showwarning("Warning", "Sample images folder not found. Please create sample images first.")
+        # Silently skip if folder doesn't exist - users will paste their own images
             
     def load_images_from_folder(self, folder_path):
         """Load all images from a specified folder"""
