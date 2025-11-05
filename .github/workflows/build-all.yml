@@ -61,7 +61,11 @@ jobs:
       shell: cmd
       run: |
         call venv\Scripts\activate.bat
-        pyinstaller --onefile --windowed --name PropertyPDFBuilder --add-data "logo.png;." --add-data "sample_images;sample_images" pdf_builder_app.py
+        set BUILD_CMD=pyinstaller --onefile --windowed --name PropertyPDFBuilder --add-data "logo.png;."
+        if exist sample_images\* (
+          set BUILD_CMD=%BUILD_CMD% --add-data "sample_images;sample_images"
+        )
+        %BUILD_CMD% pdf_builder_app.py
     
     - name: Upload Windows executable
       uses: actions/upload-artifact@v4
