@@ -57,18 +57,32 @@ jobs:
         if exist build rmdir /s /q build
         if exist dist rmdir /s /q dist
     
+    - name: Check sample_images content
+      shell: cmd
+      run: |
+        echo Checking sample_images directory...
+        dir sample_images 2>nul || echo Directory is empty or doesn't exist
+        if exist sample_images\*.jpg set HAS_IMAGES=1
+        if exist sample_images\*.png set HAS_IMAGES=1
+        if exist sample_images\*.jpeg set HAS_IMAGES=1
+        if exist sample_images\*.webp set HAS_IMAGES=1
+        if exist sample_images\*.gif set HAS_IMAGES=1
+        if defined HAS_IMAGES (
+          echo sample_images has files
+        ) else (
+          echo sample_images is empty
+        )
+    
     - name: Build Windows executable
       shell: cmd
       run: |
         call venv\Scripts\activate.bat
         echo Building Windows executable...
-        dir sample_images
-        for %%f in (sample_images\*) do @set HAS_FILES=1
-        if defined HAS_FILES (
+        if defined HAS_IMAGES (
           echo Including sample_images in build...
           pyinstaller --onefile --windowed --name PropertyPDFBuilder --add-data "logo.png;." --add-data "sample_images;sample_images" pdf_builder_app.py
         ) else (
-          echo sample_images is empty, building without it...
+          echo Building without sample_images...
           pyinstaller --onefile --windowed --name PropertyPDFBuilder --add-data "logo.png;." pdf_builder_app.py
         )
     
