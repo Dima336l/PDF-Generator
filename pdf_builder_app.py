@@ -1352,25 +1352,25 @@ Tip: You can rename images before adding them, or use the filename as-is if it a
                         regular_images.append(img_path)
                 
                 if regular_images:
-                story.append(PageBreak())
-                story.append(Paragraph("Property Images", header_style))
-                
+                    story.append(PageBreak())
+                    story.append(Paragraph("Property Images", header_style))
+                    
                     for i, image_path in enumerate(regular_images):
-                    try:
-                        # Add image with caption
-                        img = RLImage(image_path, width=6*inch, height=4*inch)
-                        story.append(img)
-                        story.append(Spacer(1, 12))
-                        
-                        # Add caption
-                        filename = os.path.basename(image_path)
-                        story.append(Paragraph(f"Image {i+1}: {filename}", body_style))
-                        story.append(Spacer(1, 20))
-                        
-                    except Exception as e:
-                        print(f"Error adding image {image_path}: {e}")
-                        story.append(Paragraph(f"Image {i+1}: Error loading image", body_style))
-                        story.append(Spacer(1, 20))
+                        try:
+                            # Add image with caption
+                            img = RLImage(image_path, width=6*inch, height=4*inch)
+                            story.append(img)
+                            story.append(Spacer(1, 12))
+                            
+                            # Add caption
+                            filename = os.path.basename(image_path)
+                            story.append(Paragraph(f"Image {i+1}: {filename}", body_style))
+                            story.append(Spacer(1, 20))
+                            
+                        except Exception as e:
+                            print(f"Error adding image {image_path}: {e}")
+                            story.append(Paragraph(f"Image {i+1}: Error loading image", body_style))
+                            story.append(Spacer(1, 20))
             
             # Getting To The City Centre and About the City (Last Page)
             story.append(PageBreak())
