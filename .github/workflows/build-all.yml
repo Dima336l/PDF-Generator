@@ -29,12 +29,7 @@ jobs:
         ) else (
           echo logo.png found
         )
-        if not exist sample_images (
-          echo Warning: sample_images directory not found (will create empty)
-          mkdir sample_images
-        ) else (
-          echo sample_images directory found
-        )
+        echo sample_images not needed - users will paste their own images
     
     - name: Set up Python
       uses: actions/setup-python@v4
@@ -57,34 +52,12 @@ jobs:
         if exist build rmdir /s /q build
         if exist dist rmdir /s /q dist
     
-    - name: Check sample_images content
-      shell: cmd
-      run: |
-        echo Checking sample_images directory...
-        dir sample_images 2>nul || echo Directory is empty or doesn't exist
-        if exist sample_images\*.jpg set HAS_IMAGES=1
-        if exist sample_images\*.png set HAS_IMAGES=1
-        if exist sample_images\*.jpeg set HAS_IMAGES=1
-        if exist sample_images\*.webp set HAS_IMAGES=1
-        if exist sample_images\*.gif set HAS_IMAGES=1
-        if defined HAS_IMAGES (
-          echo sample_images has files
-        ) else (
-          echo sample_images is empty
-        )
-    
     - name: Build Windows executable
       shell: cmd
       run: |
         call venv\Scripts\activate.bat
-        echo Building Windows executable...
-        if defined HAS_IMAGES (
-          echo Including sample_images in build...
-          pyinstaller --onefile --windowed --name PropertyPDFBuilder --add-data "logo.png;." --add-data "sample_images;sample_images" pdf_builder_app.py
-        ) else (
-          echo Building without sample_images...
-          pyinstaller --onefile --windowed --name PropertyPDFBuilder --add-data "logo.png;." pdf_builder_app.py
-        )
+        echo Building Windows executable with logo.png...
+        pyinstaller --onefile --windowed --name PropertyPDFBuilder --add-data "logo.png;." pdf_builder_app.py
     
     - name: Upload Windows executable
       uses: actions/upload-artifact@v4
@@ -113,12 +86,7 @@ jobs:
         else
           echo "✓ logo.png found"
         fi
-        if [ ! -d "sample_images" ]; then
-          echo "Warning: sample_images directory not found (will create empty)"
-          mkdir -p sample_images
-        else
-          echo "✓ sample_images directory found"
-        fi
+        echo "sample_images not needed - users will paste their own images"
     
     - name: Set up Python
       uses: actions/setup-python@v4
