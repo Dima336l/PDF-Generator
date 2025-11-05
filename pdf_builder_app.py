@@ -13,7 +13,196 @@ from reportlab.graphics import renderPDF
 from reportlab.graphics.charts.barcharts import VerticalBarChart
 from reportlab.graphics.charts.textlabels import Label
 from reportlab.lib.colors import HexColor
+from reportlab.platypus import KeepTogether, Frame
+from reportlab.platypus.flowables import Flowable
+from reportlab.lib.utils import ImageReader
 import datetime
+
+def format_date_with_ordinal(date_obj):
+    """Format date with ordinal suffix (1st, 2nd, 3rd, 4th, etc.)"""
+    day = date_obj.day
+    if 10 <= day % 100 <= 20:
+        suffix = 'th'
+    else:
+        suffix = {1: 'st', 2: 'nd', 3: 'rd'}.get(day % 10, 'th')
+    return date_obj.strftime(f"{day}{suffix} %B %Y")
+
+class CoverPageFlowable(Flowable):
+    """Custom flowable for cover page with absolute positioning"""
+    def __init__(self, data, images, accent_gold, primary_blue):
+        Flowable.__init__(self)
+        self.data = data
+        self.images = images
+        self.accent_gold = accent_gold
+        self.primary_blue = primary_blue
+        # Account for margins - use exact frame size from reportlab
+        # Error showed frame size: 475.28 x 721.89 points
+        # A4 is 595.28 x 841.89 points
+        # So available space is: 475.28 x 721.89 points
+        # Convert to inches: 475.28/72 = 6.6 inches, 721.89/72 = 10.0 inches
+        # Use conservative margin: 1.8 inches total (0.9 per side) to ensure fit
+        margin_total = 1.8*inch
+        self.width = A4[0] - margin_total
+        self.height = A4[1] - margin_total
+        
+    def draw(self):
+        """Draw the cover page - note: reportlab uses bottom-left as origin"""
+        canvas = self.canv
+        # Use the declared width/height
+        width = self.width
+        height = self.height
+        
+        # Logo at top left (if exists) - adjust Y for bottom-left origin
+        logo_path = "logo.png"
+        logo_bottom = None
+        if os.path.exists(logo_path):
+            try:
+                logo_img = Image.open(logo_path)
+                logo_width = 1.5*inch
+                logo_height = logo_width * (logo_img.height / logo_img.width)
+                logo_y = height - logo_height - 0.2*inch
+                logo_bottom = logo_y
+                canvas.drawImage(logo_path, 0, logo_y, 
+                               width=logo_width, height=logo_height, preserveAspectRatio=True)
+            except Exception as e:
+                print(f"Error loading logo: {e}")
+        
+        # "Elevating your property experience" tagline below logo - smaller, italic style
+        if logo_bottom is not None:
+            tagline_y = logo_bottom - 0.25*inch
+        else:
+            tagline_y = height - 1.5*inch
+        canvas.setFont("Helvetica-Oblique", 8)  # Smaller, italic font
+        canvas.setFillColor(HexColor('#666666'))  # Gray color for subtlety
+        canvas.drawString(0, tagline_y, "Elevating your property experience")
+        
+        # "Property Report" text below tagline - smaller, regular style
+        canvas.setFont("Helvetica", 10)  # Smaller font
+        canvas.setFillColor(colors.black)
+        report_text_y = tagline_y - 0.25*inch
+        canvas.drawString(0, report_text_y, "Property Report")
+        
+        # Property Address (large, bold) - handle text wrapping
+        address = f"{self.data.get('address', '')}, {self.data.get('postal_code', '')}"
+        canvas.setFont("Helvetica-Bold", 24)
+        canvas.setFillColor(colors.black)
+        # Split address if too long (simple approach)
+        address_lines = []
+        words = address.split()
+        current_line = ""
+        for word in words:
+            test_line = current_line + (" " if current_line else "") + word
+            if canvas.stringWidth(test_line, "Helvetica-Bold", 24) <= width:
+                current_line = test_line
+            else:
+                if current_line:
+                    address_lines.append(current_line)
+                current_line = word
+        if current_line:
+            address_lines.append(current_line)
+        
+        # Move the address block up even more (starting from "5, Ridley Road")
+        address_y = height - 2.0*inch  # Moved up from 2.5 to 2.0
+        for i, line in enumerate(address_lines):
+            canvas.drawString(0, address_y - (i * 0.35*inch), line)
+        
+        # Calculate where the address text area ends
+        # Last line baseline - font height (24pt = ~0.33 inch)
+        last_line_baseline = address_y - (len(address_lines) - 1) * 0.35*inch
+        font_height = 24 / 72.0 * inch  # Convert 24pt to inches
+        address_bottom = last_line_baseline - font_height
+        
+        # Add spacing between address and main image - reduced to push images up
+        spacing_between_text_and_images = 0.1*inch  # Reduced spacing between address and main image
+        
+        # Main image - find exterior front image, or use first image as fallback
+        # Position main image below the address with spacing
+        main_image_height = 4.5*inch
+        main_image_bottom = address_bottom - spacing_between_text_and_images - main_image_height
+        main_image_width = width
+        
+        # Find exterior front image (case-insensitive search)
+        main_img_path = None
+        main_img_index = -1
+        if self.images and len(self.images) > 0:
+            for idx, img_path in enumerate(self.images):
+                filename = os.path.basename(img_path).lower()
+                if 'exterior' in filename and 'front' in filename:
+                    main_img_path = img_path
+                    main_img_index = idx
+                    break
+            
+            # Fallback to first image if no exterior front found
+            if main_img_path is None:
+                main_img_path = self.images[0]
+                main_img_index = 0
+        
+        if main_img_path:
+            try:
+                main_img = Image.open(main_img_path)
+                # Calculate dimensions to fit while maintaining aspect ratio
+                img_ratio = main_img.width / main_img.height
+                target_ratio = main_image_width / main_image_height
+                
+                if img_ratio > target_ratio:
+                    # Image is wider, fit to width
+                    draw_width = main_image_width
+                    draw_height = main_image_width / img_ratio
+                else:
+                    # Image is taller, fit to height
+                    draw_height = main_image_height
+                    draw_width = main_image_height * img_ratio
+                
+                # Center the image
+                x_offset = (main_image_width - draw_width) / 2
+                canvas.drawImage(main_img_path, x_offset, main_image_bottom, 
+                               width=draw_width, height=draw_height, preserveAspectRatio=True)
+                    
+            except Exception as e:
+                print(f"Error adding main image: {e}")
+        
+        # Three thumbnail images below main image (exclude the main image)
+        thumbnail_bottom = main_image_bottom - 2*inch
+        thumbnail_height = 1.5*inch
+        thumbnail_width = (width - 0.4*inch) / 3  # 3 thumbnails with spacing
+        
+        # Get list of images excluding the main image
+        thumbnail_images = [img for idx, img in enumerate(self.images) if idx != main_img_index]
+        
+        # Track the lowest point of thumbnails to add padding above footer
+        lowest_thumbnail_bottom = thumbnail_bottom
+        
+        for i in range(min(3, len(thumbnail_images))):
+            try:
+                thumb_img_path = thumbnail_images[i]
+                thumb_x = i * (thumbnail_width + 0.2*inch)
+                # All thumbnails use the same fixed size (same rectangle height and width)
+                thumb_y_position = thumbnail_bottom
+                canvas.drawImage(thumb_img_path, thumb_x, thumb_y_position,
+                               width=thumbnail_width, height=thumbnail_height, preserveAspectRatio=False)
+                
+                # All thumbnails have the same bottom position
+                lowest_thumbnail_bottom = thumbnail_bottom
+            except Exception as e:
+                print(f"Error adding thumbnail {i+1}: {e}")
+        
+        # Footer bar with gold background - fixed at the bottom of the page
+        footer_height = 0.4*inch
+        # Always position footer at the bottom of the page (accounting for margins)
+        footer_y = 0  # Bottom of the available canvas area
+        
+        canvas.setFillColor(self.accent_gold)
+        canvas.rect(0, footer_y, width, footer_height, fill=1, stroke=0)
+        
+        # Footer text (centered, white)
+        report_date = format_date_with_ordinal(datetime.datetime.now())
+        footer_text = f"Report created on {report_date}"
+        canvas.setFont("Helvetica", 11)
+        canvas.setFillColor(colors.white)
+        text_width = canvas.stringWidth(footer_text, "Helvetica", 11)
+        # Center text vertically in footer
+        text_y = footer_y + (footer_height / 2) - 0.1*inch  # Adjust for font baseline
+        canvas.drawString((width - text_width) / 2, text_y, footer_text)
 
 class PDFBuilderApp:
     def __init__(self, root):
@@ -493,26 +682,65 @@ class PDFBuilderApp:
                 fontName='Helvetica-Bold'
             )
             
-            # Create header with branding
-            story.append(self.create_header(data, accent_gold, primary_blue))
+            # Create cover page (first page)
+            cover_page = self.create_cover_page(data, accent_gold, primary_blue)
+            if cover_page:
+                story.append(cover_page)
+                story.append(PageBreak())
+            
+            # Investment Opportunity Section - Second Page Design
+            # Logo on left with title next to it
+            logo_path = "logo.png"
+            if os.path.exists(logo_path):
+                try:
+                    # Calculate logo dimensions same as first page
+                    logo_img_pil = Image.open(logo_path)
+                    logo_width = 1.5*inch
+                    logo_height = logo_width * (logo_img_pil.height / logo_img_pil.width)
+                    logo_img = RLImage(logo_path, width=logo_width, height=logo_height)
+                    
+                    # Create header table with logo on left and title on right
+                    title_para = Paragraph("Investment Opportunity", 
+                        ParagraphStyle('InvestmentTitle', parent=styles['Heading1'], fontSize=24, 
+                                      textColor=colors.black, fontName='Helvetica-Bold'))
+                    
+                    header_table = Table([[logo_img, title_para]], colWidths=[2*inch, 5*inch])
+                    header_table.setStyle(TableStyle([
+                        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                        ('ALIGN', (0, 0), (0, 0), 'LEFT'),
+                        ('ALIGN', (1, 0), (1, 0), 'LEFT'),
+                        ('LEFTPADDING', (0, 0), (0, 0), 0),
+                        ('RIGHTPADDING', (0, 0), (0, 0), 10),
+                        ('LEFTPADDING', (1, 0), (1, 0), 10),
+                        ('TOPPADDING', (0, 0), (-1, -1), 5),
+                        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+                    ]))
+                    story.append(header_table)
+                except Exception as e:
+                    print(f"Error loading logo: {e}")
+                    # Fallback to just title
+                    investment_title_style = ParagraphStyle(
+                        'InvestmentTitle',
+                        parent=styles['Heading1'],
+                        fontSize=24,
+                        spaceAfter=25,
+                        textColor=colors.black,
+                        fontName='Helvetica-Bold'
+                    )
+                    story.append(Paragraph("Investment Opportunity", investment_title_style))
+            else:
+                # Just title if no logo
+                investment_title_style = ParagraphStyle(
+                    'InvestmentTitle',
+                    parent=styles['Heading1'],
+                    fontSize=24,
+                    spaceAfter=25,
+                    textColor=colors.black,
+                    fontName='Helvetica-Bold'
+                )
+                story.append(Paragraph("Investment Opportunity", investment_title_style))
+            
             story.append(Spacer(1, 20))
-            
-            # Property Header Section
-            property_header = f"{data.get('address', '')}, {data.get('postal_code', '')}"
-            story.append(Paragraph(property_header, header_style))
-            
-            # Asking Price in highlighted box
-            if data.get('asking_price'):
-                asking_price_text = f"<b>Asking Price:</b> {data.get('asking_price')}"
-                story.append(Paragraph(asking_price_text, highlight_style))
-            
-            # Report Date
-            report_date = datetime.datetime.now().strftime("%dth %B %Y")
-            story.append(Paragraph(f"Report created on {report_date}", body_style))
-            story.append(Spacer(1, 25))
-            
-            # Investment Opportunity Section
-            story.append(Paragraph("Investment Opportunity", header_style))
             
             # Calculate investment metrics
             try:
@@ -562,177 +790,591 @@ class PDFBuilderApp:
                 monthly_profit = 0
                 roi = 0
             
-            # Investment Summary Table with professional styling
-            investment_data = [
-                ['Purchase Price', f"£{purchase_price:,.0f}"],
+            # Three Key Metrics Boxes (horizontal gold boxes) - individual boxes, bigger
+            box_width = 2.4*inch
+            box_spacing = 0.15*inch  # Space between boxes
+            
+            # Create three individual boxes side by side with spacing
+            metrics_table = Table([
+                ['Purchase Price', '', 'Estimated Monthly Rent', '', 'Rental Yield'],
+                [f"£{purchase_price:,.0f}", '', f"£{monthly_rent:,.0f}pcm", '', f"{rental_yield:.1f}%"]
+            ], colWidths=[box_width, box_spacing, box_width, box_spacing, box_width])
+            metrics_table.setStyle(TableStyle([
+                # First box (Purchase Price)
+                ('BACKGROUND', (0, 0), (0, 1), accent_gold),
+                ('TEXTCOLOR', (0, 0), (0, 0), colors.black),
+                ('TEXTCOLOR', (0, 1), (0, 1), colors.white),
+                # Second box (Monthly Rent)
+                ('BACKGROUND', (2, 0), (2, 1), accent_gold),
+                ('TEXTCOLOR', (2, 0), (2, 0), colors.black),
+                ('TEXTCOLOR', (2, 1), (2, 1), colors.white),
+                # Third box (Rental Yield)
+                ('BACKGROUND', (4, 0), (4, 1), accent_gold),
+                ('TEXTCOLOR', (4, 0), (4, 0), colors.black),
+                ('TEXTCOLOR', (4, 1), (4, 1), colors.white),
+                # Spacing columns (white background)
+                ('BACKGROUND', (1, 0), (1, 1), colors.white),
+                ('BACKGROUND', (3, 0), (3, 1), colors.white),
+                # Alignment
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                # Fonts
+                ('FONTNAME', (0, 0), (4, 0), 'Helvetica'),
+                ('FONTSIZE', (0, 0), (4, 0), 12),
+                ('FONTNAME', (0, 1), (4, 1), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 1), (4, 1), 24),
+                # Padding - bigger boxes
+                ('TOPPADDING', (0, 0), (4, 0), 15),
+                ('BOTTOMPADDING', (0, 0), (4, 0), 5),
+                ('TOPPADDING', (0, 1), (4, 1), 5),
+                ('BOTTOMPADDING', (0, 1), (4, 1), 15),
+                ('LEFTPADDING', (0, 0), (4, -1), 12),
+                ('RIGHTPADDING', (0, 0), (4, -1), 12),
+            ]))
+            story.append(metrics_table)
+            story.append(Spacer(1, 30))
+            
+            # Two Column Layout for Costs and Expenses
+            # Left Column: Total Purchase Costs
+            purchase_costs_data = [
                 ['Total Purchase Costs', ''],
-                ['Deposit (20%)', f"£{deposit_amount:,.0f}"],
+                ['Deposit(20%)', f"£{deposit_amount:,.0f}"],
                 ['Stamp Duty', f"£{stamp_duty:,.0f}"],
                 ['Survey', f"£{survey_cost:,.0f}"],
                 ['Legal Fees', f"£{legal_fees:,.0f}"],
                 ['Loan Set-up', f"£{loan_setup:,.0f}"],
-                ['Total Investment Required', f"£{total_investment:,.0f}"],
-                ['Estimated Monthly Rent', f"£{monthly_rent:,.0f}pcm"],
-                ['Rental Yield', f"{rental_yield:.1f}%"]
+                ['Total Investment Required', f"£{total_investment:,.0f}"]
             ]
             
-            investment_table = Table(investment_data, colWidths=[3*inch, 2*inch])
-            investment_table.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), accent_gold),
-                ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, 0), 12),
-                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-                ('TOPPADDING', (0, 0), (-1, 0), 12),
-                ('BACKGROUND', (0, 1), (-1, -1), light_grey),
-                ('GRID', (0, 0), (-1, -1), 1, primary_blue),
-                ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-                ('FONTSIZE', (0, 1), (-1, -1), 11),
-                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [light_grey, colors.white])
-            ]))
-            
-            story.append(investment_table)
-            story.append(Spacer(1, 20))
-            
-            # Annual Expenses Table
+            # Right Column: Total Annual Expenses
             expenses_data = [
                 ['Total Annual Expenses', ''],
-                ['Mortgage @ 5.8% (Interest Only)', f"£{annual_mortgage_interest:,.0f}"],
+                [f'Mortgage @ {mortgage_rate}% (Interest Only)', f"£{annual_mortgage_interest:,.0f}"],
                 ['Council Tax', f"£{council_tax:,.0f}"],
                 ['Repairs / Maintenance', f"£{repairs:,.0f}"],
                 ['Electric / Gas', f"£{utilities:,.0f}"],
                 ['Water', f"£{water:,.0f}"],
                 ['Broadband / TV', f"£{broadband:,.0f}"],
                 ['Insurance', f"£{insurance:,.0f}"],
-                ['Total', f"£{total_annual_expenses:,.0f}"],
-                ['Monthly Profit', f"£{monthly_profit:,.0f}"],
-                ['Annual Profit', f"£{annual_profit:,.0f}"],
-                ['ROI', f"{roi:.1f}%"]
+                ['Total', f"£{total_annual_expenses:,.0f}"]
             ]
             
-            expenses_table = Table(expenses_data, colWidths=[3*inch, 2*inch])
-            expenses_table.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), success_green),
-                ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            # Create two-column table
+            two_col_data = []
+            max_rows = max(len(purchase_costs_data), len(expenses_data))
+            for i in range(max_rows):
+                left_col = purchase_costs_data[i] if i < len(purchase_costs_data) else ['', '']
+                right_col = expenses_data[i] if i < len(expenses_data) else ['', '']
+                two_col_data.append([left_col[0], left_col[1], right_col[0], right_col[1]])
+            
+            two_col_table = Table(two_col_data, colWidths=[2.2*inch, 1.3*inch, 2.2*inch, 1.3*inch])
+            
+            # Add horizontal lines between all rows
+            table_style_commands = [
+                # Header rows
+                ('BACKGROUND', (0, 0), (1, 0), colors.white),
+                ('BACKGROUND', (2, 0), (3, 0), colors.white),
+                ('FONTNAME', (0, 0), (1, 0), 'Helvetica-Bold'),
+                ('FONTNAME', (2, 0), (3, 0), 'Helvetica-Bold'),
                 ('FONTSIZE', (0, 0), (-1, 0), 12),
-                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-                ('TOPPADDING', (0, 0), (-1, 0), 12),
-                ('BACKGROUND', (0, 1), (-1, -1), light_grey),
-                ('GRID', (0, 0), (-1, -1), 1, primary_blue),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
+                ('ALIGN', (3, 0), (3, -1), 'RIGHT'),
+                # Data rows
                 ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
                 ('FONTSIZE', (0, 1), (-1, -1), 11),
-                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [light_grey, colors.white])
-            ]))
-            
-            story.append(expenses_table)
-            story.append(Spacer(1, 25))
-            
-            # Key Information Section
-            story.append(Paragraph("Key Information", header_style))
-            
-            key_info_data = [
-                ['Asking Price', data.get('asking_price', 'N/A')],
-                ['Bedrooms', data.get('bedrooms', 'N/A')],
-                ['Size', f"{data.get('size_sqm', 'N/A')} sqm"],
-                ['On the market for', f"{data.get('days_on_market', 'N/A')} days"]
+                # Total row styling (bold)
+                ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+                ('TOPPADDING', (0, 0), (-1, -1), 6),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+                ('LEFTPADDING', (0, 0), (0, -1), 5),
+                ('RIGHTPADDING', (1, 0), (1, -1), 5),
+                ('LEFTPADDING', (2, 0), (2, -1), 15),
+                ('RIGHTPADDING', (3, 0), (3, -1), 5),
             ]
             
-            key_info_table = Table(key_info_data, colWidths=[2*inch, 3*inch])
-            key_info_table.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), primary_blue),
-                ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, 0), 12),
-                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-                ('TOPPADDING', (0, 0), (-1, 0), 12),
-                ('BACKGROUND', (0, 1), (-1, -1), light_grey),
-                ('GRID', (0, 0), (-1, -1), 1, primary_blue),
-                ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-                ('FONTSIZE', (0, 1), (-1, -1), 11),
-                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [light_grey, colors.white])
+            # Add horizontal lines between all rows (light grey lines)
+            for row_idx in range(1, len(two_col_data)):
+                # Left column line - spans full width of left column
+                table_style_commands.append(('LINEBELOW', (0, row_idx), (1, row_idx), 0.5, HexColor('#E0E0E0')))
+                # Right column line - spans full width of right column
+                table_style_commands.append(('LINEBELOW', (2, row_idx), (3, row_idx), 0.5, HexColor('#E0E0E0')))
+            
+            two_col_table.setStyle(TableStyle(table_style_commands))
+            
+            # Three Vertical Boxes for Profit/ROI (positioned at bottom right, bigger)
+            # Create table with left column empty and boxes on the right
+            profit_table = Table([
+                ['', 'Monthly Profit', f"£{monthly_profit:,.0f}"],
+                ['', 'Annual Profit', f"£{annual_profit:,.0f}"],
+                ['', 'ROI', f"{roi:.1f}%"]
+            ], colWidths=[3.5*inch, 2*inch, 2*inch])
+            profit_table.setStyle(TableStyle([
+                ('BACKGROUND', (1, 0), (1, -1), accent_gold),
+                ('BACKGROUND', (2, 0), (2, -1), accent_gold),
+                ('TEXTCOLOR', (1, 0), (1, -1), colors.black),  # Labels in black
+                ('TEXTCOLOR', (2, 0), (2, -1), colors.white),  # Values in white bold
+                ('ALIGN', (1, 0), (1, -1), 'LEFT'),
+                ('ALIGN', (2, 0), (2, -1), 'RIGHT'),
+                ('VALIGN', (1, 0), (2, -1), 'MIDDLE'),
+                ('FONTNAME', (1, 0), (1, -1), 'Helvetica'),
+                ('FONTSIZE', (1, 0), (1, -1), 13),  # Bigger labels
+                ('FONTNAME', (2, 0), (2, -1), 'Helvetica-Bold'),
+                ('FONTSIZE', (2, 0), (2, -1), 24),  # Bigger values
+                ('TOPPADDING', (1, 0), (2, -1), 16),  # Bigger boxes
+                ('BOTTOMPADDING', (1, 0), (2, -1), 16),
+                ('LEFTPADDING', (1, 0), (1, -1), 18),
+                ('RIGHTPADDING', (1, 0), (1, -1), 12),
+                ('LEFTPADDING', (2, 0), (2, -1), 12),
+                ('RIGHTPADDING', (2, 0), (2, -1), 18),
             ]))
             
-            story.append(key_info_table)
-            story.append(Spacer(1, 15))
+            # Use KeepTogether to ensure profit boxes stay on same page as costs table
+            # Include spacer to push profit boxes toward bottom
+            story.append(KeepTogether([two_col_table, Spacer(1, 2*inch), profit_table]))
             
-            # Key Features
+            # Page break before Key Information section
+            story.append(PageBreak())
+            
+            # Key Information Section - Third Page Design (all content on one page)
+            # Collect all content first, then wrap in KeepTogether
+            key_info_content = []
+            
+            # Logo on left with "Key Information" title
+            logo_path = "logo.png"
+            if os.path.exists(logo_path):
+                try:
+                    # Calculate logo dimensions same as first page
+                    logo_img_pil = Image.open(logo_path)
+                    logo_width = 1.5*inch
+                    logo_height = logo_width * (logo_img_pil.height / logo_img_pil.width)
+                    logo_img = RLImage(logo_path, width=logo_width, height=logo_height)
+                    
+                    # Create header table with logo on left and title on right
+                    key_info_title_para = Paragraph("Key Information", 
+                        ParagraphStyle('KeyInfoTitle', parent=styles['Heading1'], fontSize=24, 
+                                      textColor=colors.black, fontName='Helvetica-Bold'))
+                    
+                    header_table = Table([[logo_img, key_info_title_para]], colWidths=[2*inch, 5*inch])
+                    header_table.setStyle(TableStyle([
+                        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                        ('ALIGN', (0, 0), (0, 0), 'LEFT'),
+                        ('ALIGN', (1, 0), (1, 0), 'LEFT'),
+                        ('LEFTPADDING', (0, 0), (0, 0), 0),
+                        ('RIGHTPADDING', (0, 0), (0, 0), 10),
+                        ('LEFTPADDING', (1, 0), (1, 0), 10),
+                        ('TOPPADDING', (0, 0), (-1, -1), 5),
+                        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+                    ]))
+                    key_info_content.append(header_table)
+                except Exception as e:
+                    print(f"Error loading logo: {e}")
+                    key_info_content.append(Paragraph("Key Information", header_style))
+            else:
+                key_info_content.append(Paragraph("Key Information", header_style))
+            
+            key_info_content.append(Spacer(1, 15))
+            
+            # Property image (reduced size to fit on page)
+            if self.images:
+                try:
+                    # Find exterior front image or use first image
+                    main_img_path = None
+                    for img_path in self.images:
+                        filename = os.path.basename(img_path).lower()
+                        if 'exterior' in filename and 'front' in filename:
+                            main_img_path = img_path
+                            break
+                    if not main_img_path:
+                        main_img_path = self.images[0]
+                    
+                    # Display image (reduced size to fit on one page)
+                    property_img_pil = Image.open(main_img_path)
+                    img_aspect = property_img_pil.width / property_img_pil.height
+                    img_width = 6.5*inch  # Slightly smaller to fit
+                    img_height = img_width / img_aspect
+                    # Limit height to ensure it fits
+                    if img_height > 3.5*inch:
+                        img_height = 3.5*inch
+                        img_width = img_height * img_aspect
+                    property_img = RLImage(main_img_path, width=img_width, height=img_height)
+                    key_info_content.append(property_img)
+                    key_info_content.append(Spacer(1, 15))
+                except Exception as e:
+                    print(f"Error loading property image: {e}")
+            
+            # Property Metrics - Four metrics displayed horizontally (label above value)
+            asking_price = data.get('asking_price', 'N/A')
+            if asking_price.startswith('£'):
+                asking_price_value = asking_price
+            else:
+                asking_price_value = f"£{asking_price.replace('£', '').strip()}"
+            
+            metrics_data = [
+                ['Asking price', 'Bedrooms', 'Size', 'On the market for'],
+                [asking_price_value, data.get('bedrooms', 'N/A'), 
+                 f"{data.get('size_sqm', 'N/A')} sqm", 
+                 f"{data.get('days_on_market', 'N/A')} days"]
+            ]
+            
+            metrics_table = Table(metrics_data, colWidths=[1.8*inch, 1.8*inch, 1.8*inch, 1.8*inch])
+            metrics_table.setStyle(TableStyle([
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica'),
+                ('FONTSIZE', (0, 0), (-1, 0), 11),
+                ('FONTNAME', (0, 1), (-1, 1), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 1), (-1, 1), 16),
+                ('TOPPADDING', (0, 0), (-1, 0), 8),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 4),
+                ('TOPPADDING', (0, 1), (-1, 1), 4),
+                ('BOTTOMPADDING', (0, 1), (-1, 1), 12),
+                ('LEFTPADDING', (0, 0), (-1, -1), 5),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 5),
+            ]))
+            key_info_content.append(metrics_table)
+            key_info_content.append(Spacer(1, 20))
+            
+            # Key Features - Bulleted list
             if data.get('key_features'):
-                story.append(Paragraph("Key Features", subheader_style))
-                story.append(Paragraph(data.get('key_features'), body_style))
-                story.append(Spacer(1, 15))
+                # Split key features by newline and create bulleted list
+                features_text = data.get('key_features', '')
+                features_list = [f.strip() for f in features_text.split('\n') if f.strip()]
+                
+                key_info_content.append(Paragraph("Key Features", header_style))
+                key_info_content.append(Spacer(1, 8))
+                
+                # Create bulleted list with reduced spacing to fit on page
+                for feature in features_list:
+                    bullet_para = Paragraph(f"• {feature}", 
+                        ParagraphStyle('KeyFeature', parent=styles['Normal'], 
+                                      fontSize=11, textColor=colors.black,
+                                      leftIndent=20, spaceAfter=5))  # Further reduced spacing
+                    key_info_content.append(bullet_para)
             
-            # EPC Information with visual chart
-            story.append(Paragraph("Energy Performance Certificate", header_style))
+            # Use KeepTogether to ensure entire Key Information section stays on same page
+            story.append(KeepTogether(key_info_content))
+            story.append(Spacer(1, 20))
             
-            # Create EPC visual chart
+            # Page break after Key Information page
+            story.append(PageBreak())
+            
+            # Other Key Information Page Header
+            logo_path = "logo.png"
+            if os.path.exists(logo_path):
+                try:
+                    logo_img_pil = Image.open(logo_path)
+                    logo_width = 1.5*inch
+                    logo_height = logo_width * (logo_img_pil.height / logo_img_pil.width)
+                    logo_img = RLImage(logo_path, width=logo_width, height=logo_height)
+                    
+                    # Create header table with logo on left and title centered
+                    other_key_title_para = Paragraph("Other Key Information", 
+                        ParagraphStyle('OtherKeyTitle', parent=styles['Heading1'], fontSize=24, 
+                                      textColor=colors.black, fontName='Helvetica-Bold',
+                                      alignment=1))  # 1 = TA_CENTER
+                    
+                    header_table = Table([[logo_img, other_key_title_para]], colWidths=[2*inch, 5*inch])
+                    header_table.setStyle(TableStyle([
+                        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                        ('ALIGN', (0, 0), (0, 0), 'LEFT'),
+                        ('ALIGN', (1, 0), (1, 0), 'CENTER'),
+                        ('LEFTPADDING', (0, 0), (0, 0), 0),
+                        ('RIGHTPADDING', (0, 0), (0, 0), 10),
+                        ('LEFTPADDING', (1, 0), (1, 0), 10),
+                        ('TOPPADDING', (0, 0), (-1, -1), 5),
+                        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+                    ]))
+                    story.append(header_table)
+                except Exception as e:
+                    print(f"Error loading logo: {e}")
+                    story.append(Paragraph("Other Key Information", header_style))
+            else:
+                story.append(Paragraph("Other Key Information", header_style))
+            
+            story.append(Spacer(1, 20))
+            
+            # Large Property Image below header
+            if self.images:
+                try:
+                    # Find exterior front image or use first image
+                    main_img_path = None
+                    for img_path in self.images:
+                        filename = os.path.basename(img_path).lower()
+                        if 'exterior' in filename and 'front' in filename:
+                            main_img_path = img_path
+                            break
+                    if not main_img_path:
+                        main_img_path = self.images[0]
+                    
+                    # Display large image
+                    property_img_pil = Image.open(main_img_path)
+                    img_aspect = property_img_pil.width / property_img_pil.height
+                    img_width = 7*inch  # Full width
+                    img_height = img_width / img_aspect
+                    # Limit height to ensure it fits nicely
+                    if img_height > 3.5*inch:
+                        img_height = 3.5*inch
+                        img_width = img_height * img_aspect
+                    property_img = RLImage(main_img_path, width=img_width, height=img_height)
+                    story.append(property_img)
+                    story.append(Spacer(1, 20))
+                except Exception as e:
+                    print(f"Error loading property image: {e}")
+            
+            # EPC Section - Horizontal Layout: Title (left) | Chart (middle) | Details (right)
+            epc_title_para = Paragraph("Energy Performance Certificate", 
+                ParagraphStyle('EPCTitle', parent=styles['Heading2'], fontSize=14, 
+                              textColor=colors.black, fontName='Helvetica-Bold'))
+            
+            # Create EPC visual chart (vertical bars)
             epc_chart = self.create_epc_chart(data, primary_blue, accent_gold, success_green)
-            story.append(epc_chart)
-            story.append(Spacer(1, 15))
             
-            # EPC Details Table
-            epc_data = [
-                ['Latest Inspection Date', data.get('inspection_date', 'N/A')],
-                ['Window Glazing', data.get('window_glazing', 'N/A')],
-                ['Building Construction Age', data.get('building_age', 'N/A')]
-            ]
+            # EPC Details (right side)
+            epc_details_para = Paragraph(
+                f"<b>Latest available inspection date</b><br/>"
+                f"{data.get('inspection_date', 'N/A')}<br/><br/>"
+                f"<b>Window glazing</b><br/>"
+                f"{data.get('window_glazing', 'N/A')}<br/><br/>"
+                f"<b>Building construction age band</b><br/>"
+                f"{data.get('building_age', 'N/A')}",
+                ParagraphStyle('EPCDetails', parent=styles['Normal'], 
+                              fontSize=11, textColor=colors.black,
+                              leftIndent=0))
             
-            epc_table = Table(epc_data, colWidths=[2*inch, 3*inch])
+            # Create horizontal table for EPC section
+            epc_table = Table([[epc_title_para, epc_chart, epc_details_para]], 
+                             colWidths=[2*inch, 3.5*inch, 2.5*inch])
             epc_table.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), accent_gold),
-                ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, 0), 12),
-                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-                ('TOPPADDING', (0, 0), (-1, 0), 12),
-                ('BACKGROUND', (0, 1), (-1, -1), light_grey),
-                ('GRID', (0, 0), (-1, -1), 1, primary_blue),
-                ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-                ('FONTSIZE', (0, 1), (-1, -1), 11),
-                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [light_grey, colors.white])
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('ALIGN', (0, 0), (0, 0), 'LEFT'),
+                ('ALIGN', (1, 0), (1, 0), 'CENTER'),
+                ('ALIGN', (2, 0), (2, 0), 'LEFT'),
+                ('TOPPADDING', (0, 0), (0, 0), 20),  # More padding for title column
+                ('TOPPADDING', (1, 0), (2, 0), 10),  # Regular padding for other columns
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
             ]))
-            
             story.append(epc_table)
-            story.append(Spacer(1, 15))
+            story.append(Spacer(1, 10))
             
-            # Internet/Broadband
+            # Disclaimer text in grey
+            disclaimer_para = Paragraph(
+                "This EPC data is accurate up to 6 months ago. If a more recent EPC assessment was done within this period, it will not be displayed here.",
+                ParagraphStyle('EPCDisclaimer', parent=styles['Normal'], 
+                              fontSize=9, textColor=HexColor('#666666')))
+            story.append(disclaimer_para)
+            story.append(Spacer(1, 20))
+            
+            # Internet / Broadband Availability - Horizontal Layout
             if data.get('broadband_available'):
-                story.append(Paragraph("Internet / Broadband Availability", subheader_style))
-                story.append(Paragraph(f"<b>Broadband available:</b> {data.get('broadband_available')}", body_style))
-                story.append(Paragraph(f"<b>Highest available download speed:</b> {data.get('download_speed', 'N/A')}", body_style))
-                story.append(Paragraph(f"<b>Highest available upload speed:</b> {data.get('upload_speed', 'N/A')}", body_style))
-                story.append(Spacer(1, 15))
+                broadband_title_para = Paragraph("Internet / Broadband Availability", 
+                    ParagraphStyle('BroadbandTitle', parent=styles['Heading2'], fontSize=14, 
+                                  textColor=colors.black, fontName='Helvetica-Bold'))
+                
+                # Create three horizontal items (values are bold, not labels)
+                broadband_item1 = Paragraph(
+                    f"Broadband available<br/><b>{data.get('broadband_available', 'N/A')}</b>",
+                    ParagraphStyle('BroadbandItem', parent=styles['Normal'], 
+                                  fontSize=11, textColor=colors.black))
+                
+                broadband_item2 = Paragraph(
+                    f"Highest available download speed<br/><b>{data.get('download_speed', 'N/A')}</b>",
+                    ParagraphStyle('BroadbandItem', parent=styles['Normal'], 
+                                  fontSize=11, textColor=colors.black))
+                
+                broadband_item3 = Paragraph(
+                    f"Highest available upload speed<br/><b>{data.get('upload_speed', 'N/A')}</b>",
+                    ParagraphStyle('BroadbandItem', parent=styles['Normal'], 
+                                  fontSize=11, textColor=colors.black))
+                
+                # Create horizontal table for broadband info (title row, then three items)
+                broadband_table = Table([
+                    [broadband_title_para, '', ''],
+                    [broadband_item1, broadband_item2, broadband_item3]
+                ], colWidths=[2.3*inch, 2.3*inch, 2.4*inch])
+                broadband_table.setStyle(TableStyle([
+                    ('SPAN', (0, 0), (-1, 0)),  # Title spans all columns
+                    ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                    ('ALIGN', (0, 0), (0, 0), 'LEFT'),
+                    ('ALIGN', (0, 1), (-1, 1), 'LEFT'),
+                    ('TOPPADDING', (0, 0), (-1, 0), 5),
+                    ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
+                    ('TOPPADDING', (0, 1), (-1, 1), 5),
+                    ('BOTTOMPADDING', (0, 1), (-1, 1), 5),
+                ]))
+                story.append(broadband_table)
+                story.append(Spacer(1, 20))
             
-            # Location Information
-            story.append(Paragraph("Getting To The City Centre", header_style))
+            # Floor Plans Section
+            if self.images:
+                # Filter floor plan images
+                floor_plan_images = []
+                for img_path in self.images:
+                    filename = os.path.basename(img_path).lower()
+                    if 'floor' in filename or 'plan' in filename:
+                        floor_plan_images.append(img_path)
+                
+                if floor_plan_images:
+                    for i, image_path in enumerate(floor_plan_images):
+                        # Each floor plan gets its own page
+                        story.append(PageBreak())
+                        
+                        try:
+                            # Load image to get dimensions
+                            img_pil = Image.open(image_path)
+                            img_aspect = img_pil.width / img_pil.height
+                            
+                            # Display floor plan images - larger size for better visibility
+                            img_width = 6.5*inch
+                            img_height = img_width / img_aspect
+                            
+                            # Limit height to ensure it fits on page
+                            if img_height > 4.5*inch:
+                                img_height = 4.5*inch
+                                img_width = img_height * img_aspect
+                            
+                            img = RLImage(image_path, width=img_width, height=img_height)
+                            
+                            # Center the image on the page
+                            # A4 page height is 11.69 inches, with margins (0.75 inch each) = 10.19 inches usable
+                            # For simpler calculation, use approximately 10 inches usable space
+                            available_height = 10*inch
+                            
+                            # Calculate vertical centering
+                            # Position image in the middle of available space
+                            remaining_height = available_height - img_height
+                            top_spacer = remaining_height / 2
+                            
+                            # Add spacer to center vertically (before image)
+                            if top_spacer > 0:
+                                story.append(Spacer(1, top_spacer))
+                            
+                            # Center horizontally using Table
+                            center_table = Table([[img]], colWidths=[7.5*inch])
+                            center_table.setStyle(TableStyle([
+                                ('ALIGN', (0, 0), (0, 0), 'CENTER'),
+                                ('VALIGN', (0, 0), (0, 0), 'MIDDLE'),
+                            ]))
+                            story.append(center_table)
+                            
+                        except Exception as e:
+                            print(f"Error adding floor plan image {image_path}: {e}")
             
-            location_data = [
-                ['By Car', f"{data.get('time_car', 'N/A')} minutes", f"{data.get('distance_city_centre', 'N/A')} miles"],
-                ['By Public Transport', f"{data.get('time_public_transport', 'N/A')} minutes", f"{data.get('walk_to_station', 'N/A')} mins walk ({data.get('station_distance', 'N/A')} mi)"],
-                ['Bus Routes', data.get('bus_routes', 'N/A'), f"Every {data.get('bus_frequency', 'N/A')}"]
-            ]
+            # Property Images (excluding floor plans, directions, and Liverpool images)
+            if self.images:
+                # Filter out floor plan images, directions image, and Liverpool images (they're already shown in their sections)
+                regular_images = []
+                for img_path in self.images:
+                    filename = os.path.basename(img_path).lower()
+                    if ('floor' not in filename and 'plan' not in filename and 
+                        'direction' not in filename and 'map' not in filename and 'city' not in filename and
+                        'liverpool' not in filename):
+                        regular_images.append(img_path)
+                
+                if regular_images:
+                    story.append(PageBreak())
+                    story.append(Paragraph("Property Images", header_style))
+                    
+                    for i, image_path in enumerate(regular_images):
+                        try:
+                            # Add image with caption
+                            img = RLImage(image_path, width=6*inch, height=4*inch)
+                            story.append(img)
+                            story.append(Spacer(1, 12))
+                            
+                            # Add caption
+                            filename = os.path.basename(image_path)
+                            story.append(Paragraph(f"Image {i+1}: {filename}", body_style))
+                            story.append(Spacer(1, 20))
+                            
+                        except Exception as e:
+                            print(f"Error adding image {image_path}: {e}")
+                            story.append(Paragraph(f"Image {i+1}: Error loading image", body_style))
+                            story.append(Spacer(1, 20))
             
-            location_table = Table(location_data, colWidths=[2*inch, 1.5*inch, 2.5*inch])
-            location_table.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), success_green),
-                ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, 0), 12),
-                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-                ('TOPPADDING', (0, 0), (-1, 0), 12),
-                ('BACKGROUND', (0, 1), (-1, -1), light_grey),
-                ('GRID', (0, 0), (-1, -1), 1, primary_blue),
-                ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-                ('FONTSIZE', (0, 1), (-1, -1), 11),
-                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [light_grey, colors.white])
-            ]))
+            # Getting To The City Centre and About the City (Last Page)
+            story.append(PageBreak())
             
-            story.append(location_table)
+            # Location Information - Logo, Title, and Directions Image
+            logo_path = "logo.png"
+            if os.path.exists(logo_path):
+                try:
+                    logo_img_pil = Image.open(logo_path)
+                    logo_width = 1.5*inch
+                    logo_height = logo_width * (logo_img_pil.height / logo_img_pil.width)
+                    logo_img = RLImage(logo_path, width=logo_width, height=logo_height)
+                    
+                    # Create header table with logo on left and title centered
+                    city_centre_title_para = Paragraph("Getting To The City Centre", 
+                        ParagraphStyle('CityCentreTitle', parent=styles['Heading1'], fontSize=24, 
+                                      textColor=colors.black, fontName='Helvetica-Bold',
+                                      alignment=1))  # 1 = TA_CENTER
+                    
+                    header_table = Table([[logo_img, city_centre_title_para]], colWidths=[2*inch, 5*inch])
+                    header_table.setStyle(TableStyle([
+                        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                        ('ALIGN', (0, 0), (0, 0), 'LEFT'),
+                        ('ALIGN', (1, 0), (1, 0), 'CENTER'),
+                        ('LEFTPADDING', (0, 0), (0, 0), 0),
+                        ('RIGHTPADDING', (0, 0), (0, 0), 10),
+                        ('LEFTPADDING', (1, 0), (1, 0), 10),
+                        ('TOPPADDING', (0, 0), (-1, -1), 5),
+                        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+                    ]))
+                    story.append(header_table)
+                except Exception as e:
+                    print(f"Error loading logo: {e}")
+                    story.append(Paragraph("Getting To The City Centre", header_style))
+            else:
+                story.append(Paragraph("Getting To The City Centre", header_style))
+            
+            story.append(Spacer(1, 20))
+            
+            # Directions Image
+            directions_image_path = None
+            # Check if directions image exists in images list
+            for img_path in self.images:
+                filename = os.path.basename(img_path).lower()
+                if 'direction' in filename or 'map' in filename or 'city' in filename:
+                    directions_image_path = img_path
+                    break
+            
+            # If not found in images list, check sample_images folder
+            if not directions_image_path:
+                sample_paths = [
+                    "sample_images/directions.png",
+                    "directions.png",
+                    "sample_images/directions.jpg",
+                    "directions.jpg"
+                ]
+                for path in sample_paths:
+                    if os.path.exists(path):
+                        directions_image_path = path
+                        break
+            
+            if directions_image_path:
+                try:
+                    # Load image to get dimensions
+                    img_pil = Image.open(directions_image_path)
+                    img_aspect = img_pil.width / img_pil.height
+                    
+                    # Display directions image - full width
+                    img_width = 7*inch
+                    img_height = img_width / img_aspect
+                    
+                    # Limit height to ensure it fits on page
+                    if img_height > 8*inch:
+                        img_height = 8*inch
+                        img_width = img_height * img_aspect
+                    
+                    directions_img = RLImage(directions_image_path, width=img_width, height=img_height)
+                    story.append(directions_img)
+                except Exception as e:
+                    print(f"Error loading directions image: {e}")
+            else:
+                # Fallback: show message if no directions image found
+                story.append(Paragraph("Directions image not found", body_style))
+            
             story.append(Spacer(1, 15))
             
             # About the City
@@ -743,37 +1385,82 @@ class PDFBuilderApp:
                 story.append(Paragraph(f"<b>Population:</b> {data.get('population', 'N/A')}", body_style))
                 story.append(Spacer(1, 15))
             
-            # Property Images
-            if self.images:
-                story.append(PageBreak())
-                story.append(Paragraph("Property Images", header_style))
+            # Liverpool Pictures Section
+            liverpool_images = []
+            # Check if Liverpool images exist in images list
+            for img_path in self.images:
+                filename = os.path.basename(img_path).lower()
+                if 'liverpool' in filename:
+                    liverpool_images.append(img_path)
+            
+            # If not found in images list, check sample_images folder
+            if not liverpool_images:
+                sample_paths = [
+                    "sample_images/liverpool1.jpg",
+                    "sample_images/liverpool2.jpg",
+                    "sample_images/liverpool3.jpg"
+                ]
+                for path in sample_paths:
+                    if os.path.exists(path):
+                        liverpool_images.append(path)
+            
+            if liverpool_images:
+                story.append(Spacer(1, 10))
+                # Display Liverpool images in a row (3 images side by side) - all same width and height
+                if len(liverpool_images) >= 3:
+                    # Fixed dimensions for all images
+                    fixed_width = 2.3*inch
+                    fixed_height = 2.3*inch  # Same as width for square images
+                    
+                    # Create table with 3 images
+                    img_cells = []
+                    for img_path in liverpool_images[:3]:
+                        try:
+                            # Use fixed dimensions to make them all the same size (may crop/distort to fit)
+                            img = RLImage(img_path, width=fixed_width, height=fixed_height)
+                            img_cells.append(img)
+                        except Exception as e:
+                            print(f"Error loading Liverpool image {img_path}: {e}")
+                            img_cells.append(Paragraph("", body_style))
+                    
+                    if len(img_cells) == 3:
+                        liverpool_table = Table([img_cells], colWidths=[fixed_width, fixed_width, fixed_width])
+                        liverpool_table.setStyle(TableStyle([
+                            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                            ('TOPPADDING', (0, 0), (-1, -1), 5),
+                            ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+                        ]))
+                        story.append(liverpool_table)
+                else:
+                    # If less than 3 images, display them vertically with same dimensions
+                    fixed_width = 6*inch
+                    fixed_height = 4*inch
+                    for img_path in liverpool_images:
+                        try:
+                            # Use fixed dimensions to make them all the same size
+                            img = RLImage(img_path, width=fixed_width, height=fixed_height)
+                            story.append(img)
+                            story.append(Spacer(1, 10))
+                        except Exception as e:
+                            print(f"Error loading Liverpool image {img_path}: {e}")
                 
-                for i, image_path in enumerate(self.images):
-                    try:
-                        # Add image with caption
-                        img = RLImage(image_path, width=6*inch, height=4*inch)
-                        story.append(img)
-                        story.append(Spacer(1, 12))
-                        
-                        # Add caption
-                        filename = os.path.basename(image_path)
-                        story.append(Paragraph(f"Image {i+1}: {filename}", body_style))
-                        story.append(Spacer(1, 20))
-                        
-                    except Exception as e:
-                        print(f"Error adding image {image_path}: {e}")
-                        story.append(Paragraph(f"Image {i+1}: Error loading image", body_style))
-                        story.append(Spacer(1, 20))
+                story.append(Spacer(1, 15))
             
             # Build PDF
             doc.build(story)
-            
-            messagebox.showinfo("Success", f"Professional investment report PDF generated successfully!\nSaved as: {file_path}")
             
         except Exception as e:
             print(f"Error generating PDF: {e}")
             messagebox.showerror("Error", f"Error generating PDF: {str(e)}")
             
+    def create_cover_page(self, data, accent_gold, primary_blue):
+        """Create the cover page with logo, property address, main image, thumbnails, and footer"""
+        if not self.images:
+            return None  # Skip cover page if no images
+        
+        return CoverPageFlowable(data, self.images, accent_gold, primary_blue)
+    
     def create_header(self, data, accent_gold, primary_blue):
         """Create a professional header with branding"""
         header_drawing = Drawing(7.5*inch, 1.5*inch)
@@ -792,66 +1479,99 @@ class PDFBuilderApp:
         return header_drawing
         
     def create_epc_chart(self, data, primary_blue, accent_gold, success_green):
-        """Create a visual EPC rating chart"""
-        drawing = Drawing(7*inch, 3*inch)
+        """Create a visual EPC rating chart with vertical bars"""
+        # Create a vertical bar chart - narrower width for middle column
+        drawing = Drawing(3.5*inch, 2.5*inch)
         
-        # EPC bands with colors
+        # EPC bands with colors (A at top, G at bottom)
         epc_bands = [
-            ('A', 92, 100, success_green),
-            ('B', 81, 91, HexColor('#22c55e')),
-            ('C', 69, 80, HexColor('#84cc16')),
-            ('D', 55, 68, HexColor('#eab308')),
-            ('E', 39, 54, HexColor('#f59e0b')),
-            ('F', 21, 38, HexColor('#ef4444')),
-            ('G', 1, 20, HexColor('#dc2626'))
+            ('A', 92, 100, HexColor('#008450')),  # Dark green
+            ('B', 81, 91, HexColor('#22c55e')),   # Green
+            ('C', 69, 80, HexColor('#84cc16')),   # Light green
+            ('D', 55, 68, HexColor('#eab308')),   # Yellow
+            ('E', 39, 54, HexColor('#f59e0b')),   # Orange
+            ('F', 21, 38, HexColor('#ef4444')),   # Red
+            ('G', 1, 20, HexColor('#dc2626'))     # Dark red
         ]
         
-        # Create vertical bars for EPC chart
-        bar_width = 0.8*inch
-        bar_height = 2*inch
-        start_x = 1*inch
-        start_y = 0.5*inch
+        # Create vertical bars for EPC chart (stacked vertically as continuous scale)
+        bar_width = 0.5*inch
+        total_bar_height = 1.9*inch
+        bar_height = total_bar_height / len(epc_bands)
+        start_x = 0.8*inch  # Position for the bar
+        start_y = 0.2*inch
         
+        # Draw bars from top (A) to bottom (G) as continuous stacked rectangles
         for i, (grade, min_score, max_score, color) in enumerate(epc_bands):
-            x = start_x + (i * bar_width)
+            y = start_y + (len(epc_bands) - 1 - i) * bar_height
             
-            # Bar background
-            drawing.add(Rect(x, start_y, bar_width, bar_height, 
-                           fillColor=color, strokeColor=primary_blue, strokeWidth=1))
+            # Bar background - continuous vertical scale
+            drawing.add(Rect(start_x, y, bar_width, bar_height, 
+                           fillColor=color, strokeColor=colors.black, strokeWidth=0.5))
             
-            # Grade label
-            drawing.add(String(x + bar_width/2, start_y - 0.2*inch, grade, 
-                             fontName="Helvetica-Bold", fontSize=14, 
-                             fillColor=primary_blue, textAnchor="middle"))
+            # Grade label on the right side of the bar
+            label_x = start_x + bar_width + 0.15*inch
+            label_y = y + bar_height / 2
+            drawing.add(String(label_x, label_y, grade, 
+                             fontName="Helvetica-Bold", fontSize=13, 
+                             fillColor=colors.black, textAnchor="start"))
             
-            # Score range
-            drawing.add(String(x + bar_width/2, start_y - 0.4*inch, f"({min_score}+)", 
-                             fontName="Helvetica", fontSize=8, 
-                             fillColor=primary_blue, textAnchor="middle"))
+            # Score range next to grade
+            range_x = label_x + 0.35*inch
+            if min_score == 92:
+                range_text = f"{min_score}+"
+            else:
+                range_text = f"{min_score}-{max_score}"
+            drawing.add(String(range_x, label_y, range_text, 
+                             fontName="Helvetica", fontSize=10, 
+                             fillColor=HexColor('#666666'), textAnchor="start"))
         
         # Add current and potential scores
         current_score = int(data.get('current_rating', '72'))
         potential_score = int(data.get('potential_rating', '84'))
         
-        # Find which band the scores fall into
-        current_band = next((i for i, (_, min_score, max_score, _) in enumerate(epc_bands) 
-                           if min_score <= current_score <= max_score), 2)
-        potential_band = next((i for i, (_, min_score, max_score, _) in enumerate(epc_bands) 
-                             if min_score <= potential_score <= max_score), 1)
+        # Find which band the scores fall into and calculate position
+        def get_y_position(score):
+            for i, (_, min_score, max_score, _) in enumerate(epc_bands):
+                if min_score <= score <= max_score:
+                    # Calculate position within the band
+                    band_index = len(epc_bands) - 1 - i
+                    y_base = start_y + band_index * bar_height
+                    # Position in middle of band
+                    return y_base + bar_height / 2
+            return start_y + len(epc_bands) * bar_height / 2
         
-        # Highlight current score
-        current_x = start_x + (current_band * bar_width)
-        drawing.add(String(current_x + bar_width/2, start_y + bar_height + 0.1*inch, 
-                         f"Current: {current_score}", 
-                         fontName="Helvetica-Bold", fontSize=12, 
-                         fillColor=primary_blue, textAnchor="middle"))
+        current_y = get_y_position(current_score)
+        potential_y = get_y_position(potential_score)
         
-        # Highlight potential score
-        potential_x = start_x + (potential_band * bar_width)
-        drawing.add(String(potential_x + bar_width/2, start_y + bar_height + 0.3*inch, 
-                         f"Potential: {potential_score}", 
+        # Add "Current" label and score on the left
+        current_x = start_x - 0.4*inch
+        drawing.add(String(current_x, current_y + 0.08*inch, "Current", 
+                         fontName="Helvetica", fontSize=9, 
+                         fillColor=colors.black, textAnchor="end"))
+        drawing.add(String(current_x, current_y - 0.08*inch, f"{current_score}", 
                          fontName="Helvetica-Bold", fontSize=12, 
-                         fillColor=success_green, textAnchor="middle"))
+                         fillColor=colors.black, textAnchor="end"))
+        
+        # Add "Potential" label and score on the left
+        drawing.add(String(current_x, potential_y + 0.08*inch, "Potential", 
+                         fontName="Helvetica", fontSize=9, 
+                         fillColor=colors.black, textAnchor="end"))
+        drawing.add(String(current_x, potential_y - 0.08*inch, f"{potential_score}", 
+                         fontName="Helvetica-Bold", fontSize=12, 
+                         fillColor=colors.black, textAnchor="end"))
+        
+        # Add text above chart
+        drawing.add(String(start_x + bar_width/2, start_y + total_bar_height + 0.18*inch, 
+                         "Very energy efficient - lower running costs", 
+                         fontName="Helvetica", fontSize=8, 
+                         fillColor=HexColor('#666666'), textAnchor="middle"))
+        
+        # Add text below chart
+        drawing.add(String(start_x + bar_width/2, start_y - 0.18*inch, 
+                         "Not energy efficient - higher running costs", 
+                         fontName="Helvetica", fontSize=8, 
+                         fillColor=HexColor('#666666'), textAnchor="middle"))
         
         return drawing
 

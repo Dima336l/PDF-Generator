@@ -59,9 +59,20 @@ If you prefer to run from source:
    ```
 
 5. **Run the application**:
-   ```bash
-   python pdf_builder_app.py
-   ```
+   - **macOS/Linux** (after activating venv):
+     ```bash
+     python pdf_builder_app.py
+     ```
+   - **Windows** (after activating venv):
+     ```cmd
+     python pdf_builder_app.py
+     ```
+   - **Windows** (without activating, use venv's Python directly):
+     ```cmd
+     venv\Scripts\python.exe pdf_builder_app.py
+     ```
+   
+   **Note**: Make sure your virtual environment is activated before running, or use the venv's Python directly. If you see "ModuleNotFoundError", you're likely using the global Python instead of the venv.
 
 ## How to Use
 
