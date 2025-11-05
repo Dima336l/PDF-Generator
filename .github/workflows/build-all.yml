@@ -44,7 +44,7 @@ jobs:
         pyinstaller --onefile --windowed --name PropertyPDFBuilder pdf_builder_app.py
     
     - name: Upload Windows executable
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: PropertyPDFBuilder-Windows
         path: dist/PropertyPDFBuilder.exe
@@ -90,7 +90,7 @@ jobs:
         fi
     
     - name: Upload macOS app bundle
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: PropertyPDFBuilder-macOS
         path: |
