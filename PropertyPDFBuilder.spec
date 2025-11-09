@@ -5,7 +5,7 @@ a = Analysis(
     ['pdf_builder_app.py'],
     pathex=[],
     binaries=[],
-    datas=[],
+    datas=[('logo.png', '.'), ('sample_images', 'sample_images')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},

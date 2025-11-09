@@ -20,13 +20,18 @@ pip install -r requirements.txt
 
 REM Clean previous builds
 echo 🧹 Cleaning previous builds...
+echo 🔪 Ensuring no running PropertyPDFBuilder.exe process...
+taskkill /IM PropertyPDFBuilder.exe /F >nul 2>&1
 if exist "build" rmdir /s /q build
 if exist "dist" rmdir /s /q dist
 if exist "PropertyPDFBuilder.exe" del PropertyPDFBuilder.exe
 
 REM Build the Windows executable
 echo 🔨 Building Windows executable...
-pyinstaller --onefile --windowed --name PropertyPDFBuilder pdf_builder_app.py
+pyinstaller --onefile --windowed --name PropertyPDFBuilder ^
+    --add-data "logo.png;." ^
+    --add-data "sample_images;sample_images" ^
+    pdf_builder_app.py
 
 REM Check if build was successful
 if exist "dist\PropertyPDFBuilder.exe" (

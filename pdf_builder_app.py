@@ -3,6 +3,12 @@ from tkinter import ttk, filedialog, messagebox
 from PIL import Image, ImageTk
 import os
 import sys
+import math
+import datetime
+try:
+    import requests  # type: ignore[import]
+except ImportError:  # pragma: no cover - optional dependency handled at runtime
+    requests = None
 from reportlab.lib.pagesizes import A4, letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image as RLImage, Table, TableStyle, PageBreak
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -17,7 +23,6 @@ from reportlab.lib.colors import HexColor
 from reportlab.platypus import KeepTogether, Frame
 from reportlab.platypus.flowables import Flowable
 from reportlab.lib.utils import ImageReader
-import datetime
 
 def format_date_with_ordinal(date_obj):
     """Format date with ordinal suffix (1st, 2nd, 3rd, 4th, etc.)"""
@@ -45,10 +50,10 @@ def create_placeholder_drawing(width, height):
 
 class CoverPageFlowable(Flowable):
     """Custom flowable for cover page with absolute positioning"""
-    def __init__(self, data, images, accent_gold, primary_blue):
+    def __init__(self, data, images_by_section, accent_gold, primary_blue):
         Flowable.__init__(self)
         self.data = data
-        self.images = images
+        self.images_by_section = images_by_section
         self.accent_gold = accent_gold
         self.primary_blue = primary_blue
         # Account for margins - use exact frame size from reportlab
@@ -131,38 +136,24 @@ class CoverPageFlowable(Flowable):
         # Add spacing between address and main image - reduced to push images up
         spacing_between_text_and_images = 0.1*inch  # Reduced spacing between address and main image
         
-        # Main image - find exterior front image, or use first image as fallback, or use placeholder
+        # Main image - select from configured sections
         # Position main image below the address with spacing
         main_image_height = 4.5*inch
         main_image_bottom = address_bottom - spacing_between_text_and_images - main_image_height
         main_image_width = width
         
-        # Find exterior front image (case-insensitive search)
-        # Exclude directions, map, liverpool, and floorplan images
+        cover_images = self.images_by_section.get('cover', [])
+        gallery_images = self.images_by_section.get('property', [])
+        fallback_sections = ['floor_plans', 'directions', 'city']
+        
         main_img_path = None
-        main_img_index = -1
-        if self.images and len(self.images) > 0:
-            # First, filter out images that shouldn't be on cover page
-            eligible_images = []
-            for idx, img_path in enumerate(self.images):
-                filename = os.path.basename(img_path).lower()
-                # Exclude directions, map, liverpool, floorplan images
-                if not ('direction' in filename or 'map' in filename or 'city' in filename or 
-                        'liverpool' in filename or 'floor' in filename or 'plan' in filename):
-                    eligible_images.append((idx, img_path))
-            
-            # Search for exterior front in eligible images
-            for idx, img_path in eligible_images:
-                filename = os.path.basename(img_path).lower()
-                if 'exterior' in filename and 'front' in filename:
-                    main_img_path = img_path
-                    main_img_index = idx
-                    break
-            
-            # Fallback to first eligible image if no exterior front found
-            if main_img_path is None and eligible_images:
-                main_img_path = eligible_images[0][1]
-                main_img_index = eligible_images[0][0]
+        candidate_groups = [cover_images, gallery_images] + [
+            self.images_by_section.get(section_key, []) for section_key in fallback_sections
+        ]
+        for group in candidate_groups:
+            if group:
+                main_img_path = group[0]
+                break
         
         # Always draw main image (use placeholder if no image available)
         try:
@@ -200,15 +191,16 @@ class CoverPageFlowable(Flowable):
         thumbnail_height = 1.5*inch
         thumbnail_width = (width - 0.4*inch) / 3  # 3 thumbnails with spacing
         
-        # Get list of images excluding the main image and directions/map/liverpool/floorplan images
         thumbnail_images = []
-        for idx, img in enumerate(self.images):
-            if idx != main_img_index:
-                filename = os.path.basename(img).lower()
-                # Exclude directions, map, liverpool, floorplan images from thumbnails
-                if not ('direction' in filename or 'map' in filename or 'city' in filename or 
-                        'liverpool' in filename or 'floor' in filename or 'plan' in filename):
-                    thumbnail_images.append(img)
+        thumbnail_candidates = []
+        if len(cover_images) > 1:
+            thumbnail_candidates.extend(cover_images[1:])
+        thumbnail_candidates.extend(img for img in gallery_images if img != main_img_path)
+        
+        for img_path in thumbnail_candidates:
+            if len(thumbnail_images) >= 3:
+                break
+            thumbnail_images.append(img_path)
         
         # Track the lowest point of thumbnails to add padding above footer
         lowest_thumbnail_bottom = thumbnail_bottom
@@ -265,13 +257,88 @@ class PDFBuilderApp:
         self.root = root
         self.root.title("Property Investment Report Builder")
         self.root.geometry("1000x700")
+        self.root.configure(background="#f3f4f6")
         
         # Data storage
-        self.images = []
         self.property_data = {}
+        self.logo_path = get_resource_path("logo.png")
+        self.header_logo_image = None
+        if requests is not None:
+            self.http_session = requests.Session()
+            self.http_session.headers.update({
+                "User-Agent": "PropertyPDFBuilder/1.0 (+https://property-pdf.local)"
+            })
+        else:
+            self.http_session = None
+
+        # Styling
+        self.style = ttk.Style()
+        for theme in ("vista", "xpnative", "clam", "default"):
+            if theme in self.style.theme_names():
+                self.style.theme_use(theme)
+                break
+        self.style.configure("TFrame", background="#f3f4f6")
+        self.style.configure("Content.TFrame", background="#f3f4f6")
+        self.style.configure("Section.TFrame", background="#ffffff")
+        self.style.configure("Section.TLabelframe", background="#ffffff", borderwidth=0, padding=12)
+        self.style.configure("Section.TLabelframe.Label", font=("Segoe UI Semibold", 11))
+        self.style.configure("TLabel", background="#f3f4f6", font=("Segoe UI", 10))
+        self.style.configure("Section.TLabel", background="#ffffff", font=("Segoe UI", 10))
+        self.style.configure("TEntry", foreground="#111827", fieldbackground="#ffffff")
+        self.style.configure(
+            "Accent.TButton",
+            padding=8,
+            font=("Segoe UI", 10),
+            foreground="#ffffff",
+            background="#1e3a8a"
+        )
+        self.style.map(
+            "Accent.TButton",
+            foreground=[("disabled", "#d4d4d8"), ("!disabled", "#ffffff")],
+            background=[("active", "#1d4ed8"), ("pressed", "#1e40af"), ("!disabled", "#1e3a8a")]
+        )
+        self.image_sections_config = {
+            'cover': {
+                'title': 'Cover Page Images',
+                'description': 'First image appears as the large hero photo. Additional images become cover thumbnails.',
+                'allow_reorder': True,
+                'max_items': None,
+                'list_height': 5
+            },
+            'property': {
+                'title': 'Property Gallery',
+                'description': 'General property photos used throughout the report and cover thumbnails.',
+                'allow_reorder': True,
+                'max_items': None,
+                'list_height': 6
+            },
+            'floor_plans': {
+                'title': 'Floor Plans',
+                'description': 'Uploaded plans appear on dedicated floor plan pages.',
+                'allow_reorder': True,
+                'max_items': None,
+                'list_height': 5
+            },
+            'directions': {
+                'title': 'Directions / Map',
+                'description': 'Used on the “Getting To The City Centre” page. Only the first image is used.',
+                'allow_reorder': False,
+                'max_items': 1,
+                'list_height': 3
+            },
+            'city': {
+                'title': 'City Images',
+                'description': 'Urban lifestyle shots shown together near the end of the report.',
+                'allow_reorder': True,
+                'max_items': 3,
+                'list_height': 4
+            }
+        }
+        self.image_sections = {key: [] for key in self.image_sections_config.keys()}
+        self.image_listboxes = {}
         
         # Create main frame
-        self.main_frame = ttk.Frame(root, padding="10")
+        self.main_frame = ttk.Frame(root, padding="20", style="Content.TFrame")
         self.main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
         
         # Configure grid weights
@@ -280,14 +347,37 @@ class PDFBuilderApp:
         self.main_frame.columnconfigure(0, weight=1)
         
         self.create_widgets()
-        self.load_sample_data()
+        self.load_mock_data_defaults()
+        self.load_default_images()
         
     def create_widgets(self):
         """Create all the GUI widgets with tabs"""
         
+        # Header with logo and title
+        header_frame = ttk.Frame(self.main_frame, style="Content.TFrame")
+        header_frame.grid(row=0, column=0, sticky=tk.W, pady=(0, 12))
+        if os.path.exists(self.logo_path):
+            try:
+                logo_image = Image.open(self.logo_path)
+                max_width = 220
+                aspect_ratio = logo_image.height / logo_image.width if logo_image.width else 1
+                resized_height = int(max_width * aspect_ratio)
+                resized_logo = logo_image.resize((max_width, resized_height), Image.LANCZOS)
+                self.header_logo_image = ImageTk.PhotoImage(resized_logo)
+                ttk.Label(header_frame, image=self.header_logo_image, style="Content.TFrame").pack(side=tk.LEFT)
+            except Exception as exc:
+                print(f"Unable to load logo: {exc}")
+        ttk.Label(
+            header_frame,
+            text="Property Investment Report Builder",
+            font=("Segoe UI Semibold", 14),
+            background="#f3f4f6"
+        ).pack(side=tk.LEFT, padx=(12, 0))
+        
         # Create notebook for tabs
         self.notebook = ttk.Notebook(self.main_frame)
-        self.notebook.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(0, 10))
+        self.notebook.grid(row=1, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(0, 16))
+        self.main_frame.rowconfigure(1, weight=1)
         
         # Create tabs
         self.create_property_tab()
@@ -297,20 +387,21 @@ class PDFBuilderApp:
         self.create_images_tab()
         
         # Main buttons
-        button_frame = ttk.Frame(self.main_frame)
-        button_frame.grid(row=1, column=0, pady=10)
+        button_frame = ttk.Frame(self.main_frame, style="Content.TFrame")
+        button_frame.grid(row=2, column=0, pady=(8, 0))
         
-        ttk.Button(button_frame, text="Generate Investment Report PDF", command=self.generate_pdf).pack(side=tk.LEFT, padx=(0, 10))
-        ttk.Button(button_frame, text="Clear All", command=self.clear_all).pack(side=tk.LEFT, padx=(0, 10))
-        ttk.Button(button_frame, text="Load Sample Data", command=self.load_sample_data).pack(side=tk.LEFT)
+        ttk.Button(button_frame, text="Generate Investment Report PDF",
+                   command=self.generate_pdf).pack(side=tk.LEFT, padx=(0, 12))
+        ttk.Button(button_frame, text="Clear All", command=self.clear_all).pack(side=tk.LEFT, padx=(0, 12))
         
     def create_property_tab(self):
         """Create Property Information tab"""
         self.property_frame = ttk.Frame(self.notebook)
+        self.property_frame.pack_propagate(False)
         self.notebook.add(self.property_frame, text="Property Info")
         
         # Property Information Section
-        info_frame = ttk.LabelFrame(self.property_frame, text="Property Information", padding="10")
+        info_frame = ttk.LabelFrame(self.property_frame, text="Property Information", style="Section.TLabelframe")
         info_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         
         # Property fields
@@ -330,16 +421,18 @@ class PDFBuilderApp:
         self.entry_widgets = {}
         
         for i, (label_text, field_name) in enumerate(fields):
-            row_frame = ttk.Frame(info_frame)
+            row_frame = ttk.Frame(info_frame, style="Section.TFrame")
             row_frame.pack(fill=tk.X, pady=2)
             
-            ttk.Label(row_frame, text=label_text, width=20).pack(side=tk.LEFT, padx=(0, 10))
+            ttk.Label(row_frame, text=label_text, width=22, style="Section.TLabel").pack(side=tk.LEFT, padx=(0, 12))
             
             if field_name in ["key_features", "description"]:
-                widget = tk.Text(row_frame, height=3, width=60)
+                widget = tk.Text(row_frame, height=3, width=60, bg="#ffffff", fg="#111827", wrap="word", insertbackground="#1e3a8a")
+                widget.configure(font=("Segoe UI", 10))
                 widget.pack(side=tk.LEFT, fill=tk.X, expand=True)
             else:
                 widget = ttk.Entry(row_frame, width=60)
+                widget.configure(font=("Segoe UI", 10))
                 widget.pack(side=tk.LEFT, fill=tk.X, expand=True)
             
             self.entry_widgets[field_name] = widget
@@ -347,10 +440,11 @@ class PDFBuilderApp:
     def create_investment_tab(self):
         """Create Investment Analysis tab"""
         self.investment_frame = ttk.Frame(self.notebook)
+        self.investment_frame.pack_propagate(False)
         self.notebook.add(self.investment_frame, text="Investment Analysis")
         
         # Investment Analysis Section
-        investment_frame = ttk.LabelFrame(self.investment_frame, text="Investment Analysis", padding="10")
+        investment_frame = ttk.LabelFrame(self.investment_frame, text="Investment Analysis", style="Section.TLabelframe")
         investment_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         
         # Investment fields
@@ -372,12 +466,13 @@ class PDFBuilderApp:
         ]
         
         for i, (label_text, field_name) in enumerate(investment_fields):
-            row_frame = ttk.Frame(investment_frame)
+            row_frame = ttk.Frame(investment_frame, style="Section.TFrame")
             row_frame.pack(fill=tk.X, pady=2)
             
-            ttk.Label(row_frame, text=label_text, width=25).pack(side=tk.LEFT, padx=(0, 10))
+            ttk.Label(row_frame, text=label_text, width=26, style="Section.TLabel").pack(side=tk.LEFT, padx=(0, 12))
             
             widget = ttk.Entry(row_frame, width=30)
+            widget.configure(font=("Segoe UI", 10))
             widget.pack(side=tk.LEFT, fill=tk.X, expand=True)
             
             self.entry_widgets[field_name] = widget
@@ -385,10 +480,11 @@ class PDFBuilderApp:
     def create_epc_tab(self):
         """Create EPC & Details tab"""
         self.epc_frame = ttk.Frame(self.notebook)
+        self.epc_frame.pack_propagate(False)
         self.notebook.add(self.epc_frame, text="EPC & Details")
         
         # EPC Section
-        epc_frame = ttk.LabelFrame(self.epc_frame, text="Energy Performance Certificate", padding="10")
+        epc_frame = ttk.LabelFrame(self.epc_frame, text="Energy Performance Certificate", style="Section.TLabelframe")
         epc_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         
         # EPC fields
@@ -405,10 +501,10 @@ class PDFBuilderApp:
         ]
         
         for i, (label_text, field_name) in enumerate(epc_fields):
-            row_frame = ttk.Frame(epc_frame)
+            row_frame = ttk.Frame(epc_frame, style="Section.TFrame")
             row_frame.pack(fill=tk.X, pady=2)
             
-            ttk.Label(row_frame, text=label_text, width=25).pack(side=tk.LEFT, padx=(0, 10))
+            ttk.Label(row_frame, text=label_text, width=26, style="Section.TLabel").pack(side=tk.LEFT, padx=(0, 12))
             
             widget = ttk.Entry(row_frame, width=30)
             widget.pack(side=tk.LEFT, fill=tk.X, expand=True)
@@ -418,10 +514,11 @@ class PDFBuilderApp:
     def create_location_tab(self):
         """Create Location & Transport tab"""
         self.location_frame = ttk.Frame(self.notebook)
+        self.location_frame.pack_propagate(False)
         self.notebook.add(self.location_frame, text="Location & Transport")
         
         # Location Section
-        location_frame = ttk.LabelFrame(self.location_frame, text="Location Information", padding="10")
+        location_frame = ttk.LabelFrame(self.location_frame, text="Location Information", style="Section.TLabelframe")
         location_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         
         # Location fields
@@ -439,181 +536,577 @@ class PDFBuilderApp:
         ]
         
         for i, (label_text, field_name) in enumerate(location_fields):
-            row_frame = ttk.Frame(location_frame)
+            row_frame = ttk.Frame(location_frame, style="Section.TFrame")
             row_frame.pack(fill=tk.X, pady=2)
             
-            ttk.Label(row_frame, text=label_text, width=30).pack(side=tk.LEFT, padx=(0, 10))
+            ttk.Label(
+                row_frame,
+                text=label_text,
+                width=34,
+                anchor=tk.W,
+                wraplength=260,
+                style="Section.TLabel"
+            ).pack(side=tk.LEFT, padx=(0, 12))
             
             if field_name == "about_city":
-                widget = tk.Text(row_frame, height=4, width=50)
+                widget = tk.Text(row_frame, height=4, width=50, bg="#ffffff", fg="#111827", wrap="word", insertbackground="#1e3a8a")
+                widget.configure(font=("Segoe UI", 10))
                 widget.pack(side=tk.LEFT, fill=tk.X, expand=True)
             else:
                 widget = ttk.Entry(row_frame, width=30)
+                widget.configure(font=("Segoe UI", 10))
                 widget.pack(side=tk.LEFT, fill=tk.X, expand=True)
             
             self.entry_widgets[field_name] = widget
+        
+        ttk.Button(
+            location_frame,
+            text="Auto-Fill Location From Web",
+            command=self.auto_fill_location_from_web
+        ).pack(anchor=tk.W, pady=(12, 0))
             
     def create_images_tab(self):
         """Create Images tab"""
         self.images_frame = ttk.Frame(self.notebook)
+        self.images_frame.pack_propagate(False)
         self.notebook.add(self.images_frame, text="Images")
         
         # Instructions Section
-        instructions_frame = ttk.LabelFrame(self.images_frame, text="📋 Image Naming Guide", padding="10")
+        instructions_frame = ttk.LabelFrame(self.images_frame, text="Image Upload Guide", style="Section.TLabelframe")
         instructions_frame.pack(fill=tk.X, padx=10, pady=(10, 5))
         
-        instructions_text = """Images are automatically placed based on their filename. Include these keywords in your image filenames:
-
-• Cover Page Main Image: Include "exterior" and "front" (e.g., "exterior_front.jpg")
-• Floor Plans: Include "floorplan" or "plan" (e.g., "floorplan1.png")
-• Directions Map: Include "directions", "map", or "city" (e.g., "directions.png")
-• Liverpool Pictures: Include "liverpool" (e.g., "liverpool1.jpg")
-• Property Images: Any other images will appear in the Property Images section
-
-Tip: You can rename images before adding them, or use the filename as-is if it already contains these keywords."""
+        ttk.Label(
+            instructions_frame,
+            text="Organise your images by section so it’s clear where each one appears in the report.",
+            style="Section.TLabel",
+            wraplength=820,
+            justify=tk.LEFT
+        ).pack(anchor=tk.W)
         
-        instructions_label = tk.Label(instructions_frame, text=instructions_text, 
-                                     justify=tk.LEFT, wraplength=800, font=("TkDefaultFont", 9))
-        instructions_label.pack(anchor=tk.W)
+        # Scrollable container for image sections
+        canvas_frame = ttk.Frame(self.images_frame)
+        canvas_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
         
-        # Images Section
-        images_frame = ttk.LabelFrame(self.images_frame, text="Property Images", padding="10")
-        images_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+        canvas = tk.Canvas(canvas_frame, borderwidth=0, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(canvas_frame, orient=tk.VERTICAL, command=canvas.yview)
+        scrollable_frame = ttk.Frame(canvas)
+        scrollable_window = canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
         
-        # Image listbox with scrollbar
-        listbox_frame = ttk.Frame(images_frame)
-        listbox_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
-        
-        self.image_listbox = tk.Listbox(listbox_frame, height=15)
-        self.image_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        
-        scrollbar = ttk.Scrollbar(listbox_frame, orient=tk.VERTICAL, command=self.image_listbox.yview)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        self.image_listbox.configure(yscrollcommand=scrollbar.set)
-        
-        # Image buttons
-        button_frame = ttk.Frame(images_frame)
-        button_frame.pack(fill=tk.X)
-        
-        ttk.Button(button_frame, text="Add Images", command=self.add_images).pack(side=tk.LEFT, padx=(0, 5))
-        ttk.Button(button_frame, text="Remove Selected", command=self.remove_image).pack(side=tk.LEFT, padx=(0, 5))
-        ttk.Button(button_frame, text="Move Up", command=self.move_image_up).pack(side=tk.LEFT, padx=(0, 5))
-        ttk.Button(button_frame, text="Move Down", command=self.move_image_down).pack(side=tk.LEFT, padx=(0, 5))
-        ttk.Button(button_frame, text="Load Sample Images", command=self.load_sample_images).pack(side=tk.LEFT, padx=(10, 0))
-        
-    def get_image_placement(self, filename):
-        """Determine where an image will be placed based on its filename"""
-        filename_lower = filename.lower()
-        
-        if 'exterior' in filename_lower and 'front' in filename_lower:
-            return "📸 Cover Page (Main Image)"
-        elif 'floor' in filename_lower or 'plan' in filename_lower:
-            return "📐 Floor Plans"
-        elif 'direction' in filename_lower or 'map' in filename_lower or 'city' in filename_lower:
-            return "🗺️ Directions Map"
-        elif 'liverpool' in filename_lower:
-            return "🏙️ Liverpool Pictures"
-        else:
-            return "🏠 Property Images"
-        
-    def add_images(self):
-        """Add images to the list"""
-        file_paths = filedialog.askopenfilenames(
-            title="Select Property Images",
-            filetypes=[("Image files", "*.jpg *.jpeg *.png *.gif *.bmp *.tiff *.webp")]
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda event: canvas.configure(scrollregion=canvas.bbox("all"))
         )
         
-        for file_path in file_paths:
-            self.images.append(file_path)
-            filename = os.path.basename(file_path)
-            placement = self.get_image_placement(filename)
-            # Display filename with placement info
-            display_text = f"{filename} [{placement}]"
-            self.image_listbox.insert(tk.END, display_text)
+        canvas.configure(yscrollcommand=scrollbar.set)
+        
+        def _sync_frame_width(event):
+            canvas.itemconfigure(scrollable_window, width=event.width)
+        
+        canvas.bind("<Configure>", _sync_frame_width)
+        
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        def _bind_mousewheel(widget):
+            widget.bind("<Enter>", lambda _: canvas.bind_all("<MouseWheel>", lambda event: canvas.yview_scroll(int(-1*(event.delta/120)), "units")))
+            widget.bind("<Leave>", lambda _: canvas.unbind_all("<MouseWheel>"))
+        
+        _bind_mousewheel(scrollable_frame)
+        
+        sections_container = scrollable_frame
+        
+        for section_key, config in self.image_sections_config.items():
+            self._create_image_section_ui(sections_container, section_key, config)
+        
+        # Global image actions
+        global_actions = ttk.Frame(self.images_frame, style="Content.TFrame")
+        global_actions.pack(fill=tk.X, padx=10, pady=(0, 10))
+        ttk.Button(global_actions, text="Clear All Images", command=self.clear_image_sections).pack(side=tk.LEFT)
+        
+    def _create_image_section_ui(self, parent, section_key, config):
+        section_frame = ttk.LabelFrame(parent, text=config['title'], style="Section.TLabelframe")
+        section_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+        if config.get('description'):
+            ttk.Label(
+                section_frame,
+                text=config['description'],
+                style="Section.TLabel",
+                justify=tk.LEFT,
+                wraplength=780
+            ).pack(anchor=tk.W, pady=(0, 8))
+        
+        listbox_frame = ttk.Frame(section_frame, style="Section.TFrame")
+        listbox_frame.pack(fill=tk.BOTH, expand=True)
+        
+        listbox = tk.Listbox(listbox_frame, height=config.get('list_height', 5))
+        listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self.image_listboxes[section_key] = listbox
+        
+        scrollbar = ttk.Scrollbar(listbox_frame, orient=tk.VERTICAL, command=listbox.yview)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y, padx=(5, 0))
+        listbox.configure(yscrollcommand=scrollbar.set)
+        
+        button_frame = ttk.Frame(listbox_frame, style="Section.TFrame")
+        button_frame.pack(side=tk.RIGHT, fill=tk.Y, padx=(10, 0))
+        
+        add_label = "Add Image" if config.get('max_items') == 1 else "Add Images"
+        ttk.Button(
+            button_frame,
+            text=add_label,
+            command=lambda key=section_key: self.add_images_to_section(key)
+        ).pack(fill=tk.X, pady=(0, 5))
+        
+        ttk.Button(
+            button_frame,
+            text="Remove Selected",
+            command=lambda key=section_key: self.remove_selected_image(key)
+        ).pack(fill=tk.X)
+        
+        if config.get('allow_reorder'):
+            ttk.Button(
+                button_frame,
+                text="Move Up",
+                command=lambda key=section_key: self.move_image_up_in_section(key)
+            ).pack(fill=tk.X, pady=(10, 2))
             
-    def remove_image(self):
-        """Remove selected image from the list"""
-        selection = self.image_listbox.curselection()
+            ttk.Button(
+                button_frame,
+                text="Move Down",
+                command=lambda key=section_key: self.move_image_down_in_section(key)
+            ).pack(fill=tk.X)
+    
+    def add_images_to_section(self, section_key):
+        """Prompt user to add images to a specific section"""
+        file_paths = filedialog.askopenfilenames(
+            title="Select Images",
+            filetypes=[("Image files", "*.jpg *.jpeg *.png *.gif *.bmp *.tiff *.webp")]
+        )
+        if not file_paths:
+            return
+        
+        config = self.image_sections_config.get(section_key, {})
+        for file_path in file_paths:
+            max_items = config.get('max_items')
+            if max_items and len(self.image_sections[section_key]) >= max_items:
+                messagebox.showwarning(
+                    "Image limit reached",
+                    f"{config['title']} allows up to {max_items} image(s). Remove an image before adding a new one."
+                )
+                break
+            self._add_image_path(section_key, file_path, skip_duplicates=True)
+    
+    def remove_selected_image(self, section_key):
+        """Remove the selected image from a section"""
+        listbox = self.image_listboxes.get(section_key)
+        if not listbox:
+            return
+        selection = listbox.curselection()
         if selection:
             index = selection[0]
-            self.image_listbox.delete(index)
-            del self.images[index]
-            
-    def move_image_up(self):
-        """Move selected image up in the list"""
-        selection = self.image_listbox.curselection()
+            listbox.delete(index)
+            del self.image_sections[section_key][index]
+    
+    def move_image_up_in_section(self, section_key):
+        """Move the selected image up within a section"""
+        listbox = self.image_listboxes.get(section_key)
+        if not listbox:
+            return
+        selection = listbox.curselection()
         if selection and selection[0] > 0:
             index = selection[0]
-            # Swap items
-            self.images[index], self.images[index-1] = self.images[index-1], self.images[index]
-            # Update listbox
-            item1 = self.image_listbox.get(index)
-            item2 = self.image_listbox.get(index-1)
-            self.image_listbox.delete(index-1, index)
-            self.image_listbox.insert(index-1, item1)
-            self.image_listbox.insert(index, item2)
-            self.image_listbox.selection_set(index-1)
+            images = self.image_sections[section_key]
+            images[index], images[index - 1] = images[index - 1], images[index]
             
-    def move_image_down(self):
-        """Move selected image down in the list"""
-        selection = self.image_listbox.curselection()
-        if selection and selection[0] < len(self.images) - 1:
+            current_text = listbox.get(index)
+            above_text = listbox.get(index - 1)
+            listbox.delete(index - 1, index)
+            listbox.insert(index - 1, current_text)
+            listbox.insert(index, above_text)
+            listbox.selection_set(index - 1)
+    
+    def move_image_down_in_section(self, section_key):
+        """Move the selected image down within a section"""
+        listbox = self.image_listboxes.get(section_key)
+        if not listbox:
+            return
+        selection = listbox.curselection()
+        images = self.image_sections.get(section_key, [])
+        if selection and selection[0] < len(images) - 1:
             index = selection[0]
-            # Swap items
-            self.images[index], self.images[index+1] = self.images[index+1], self.images[index]
-            # Update listbox
-            item1 = self.image_listbox.get(index)
-            item2 = self.image_listbox.get(index+1)
-            self.image_listbox.delete(index, index+1)
-            self.image_listbox.insert(index, item2)
-            self.image_listbox.insert(index+1, item1)
-            self.image_listbox.selection_set(index+1)
+            images[index], images[index + 1] = images[index + 1], images[index]
             
-    def load_sample_images(self):
-        """Load sample images from the sample_images folder"""
-        sample_folder = get_resource_path("sample_images")
-        if os.path.exists(sample_folder):
-            self.load_images_from_folder(sample_folder)
-        # Silently skip if folder doesn't exist - users will paste their own images
-            
-    def load_images_from_folder(self, folder_path):
-        """Load all images from a specified folder"""
-        image_extensions = ('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp')
-        
+            current_text = listbox.get(index)
+            below_text = listbox.get(index + 1)
+            listbox.delete(index, index + 1)
+            listbox.insert(index, below_text)
+            listbox.insert(index + 1, current_text)
+            listbox.selection_set(index + 1)
+    
+    def auto_fill_location_from_web(self):
+        """Attempt to populate the Location & Transport fields using online open-data sources."""
+        if self.http_session is None or requests is None:
+            messagebox.showerror(
+                "Dependency Missing",
+                "The 'requests' package is not available. Install it with 'pip install requests' to enable auto-fill."
+            )
+            return
+        address = self._get_widget_value('address')
+        postal_code = self._get_widget_value('postal_code')
+        city = self._get_widget_value('city')
+        if not city:
+            city = self._infer_city_from_address(address)
+        if not city:
+            messagebox.showwarning("Missing City", "Please enter a city name before using auto-fill.")
+            return
+        self.root.config(cursor="watch")
+        self.root.update_idletasks()
         try:
-            print(f"Loading images from folder: {folder_path}")
-            files = os.listdir(folder_path)
-            print(f"Found {len(files)} files in folder")
-            
-            for filename in files:
-                if filename.lower().endswith(image_extensions):
-                    image_path = os.path.join(folder_path, filename)
-                    self.images.append(image_path)
-                    placement = self.get_image_placement(filename)
-                    display_text = f"{filename} [{placement}]"
-                    self.image_listbox.insert(tk.END, display_text)
-                    print(f"Loaded image: {filename}")
-                    
-            print(f"Total images loaded: {len(self.images)}")
-        except Exception as e:
-            print(f"Error loading images from folder: {e}")
-            messagebox.showerror("Error", f"Error loading images from folder: {e}")
-            
-    def clear_all(self):
-        """Clear all form data"""
-        for widget in self.entry_widgets.values():
-            if isinstance(widget, tk.Text):
-                widget.delete("1.0", tk.END)
-            else:
-                widget.delete(0, tk.END)
+            location_data = self._gather_location_data(address, postal_code, city)
+            if not location_data:
+                messagebox.showinfo("No Data Found", f"Could not locate enough data for {city}.")
+                return
+            self._apply_location_data(location_data)
+            messagebox.showinfo("Location Updated", "Location & transport fields were filled using open web data.")
+        except requests.exceptions.RequestException as req_err:
+            messagebox.showerror("Network Error", f"Unable to reach the data services:\n{req_err}")
+        except Exception as exc:
+            messagebox.showerror("Auto-Fill Error", f"Unable to auto-fill location data:\n{exc}")
+        finally:
+            self.root.config(cursor="")
+    
+    def _gather_location_data(self, address, postal_code, city):
+        combined_address = address.strip()
+        if postal_code and postal_code not in combined_address:
+            combined_address = f"{combined_address}, {postal_code}" if combined_address else postal_code
         
-        self.images.clear()
-        self.image_listbox.delete(0, tk.END)
+        property_coords = self._geocode(combined_address) if combined_address else None
+        city_coords = self._geocode(city)
+        if property_coords is None and city_coords:
+            property_coords = city_coords
         
-    def load_sample_data(self):
-        """Load sample data for testing"""
-        # Sample property data
-        sample_data = {
+        data = {'city': city}
+        
+        # About city and population from Wikipedia/Wikidata
+        population = self._fetch_population(city)
+        if population:
+            data['population'] = f"{population:,}"
+        about_city = self._fetch_city_summary(city)
+        if about_city:
+            data['about_city'] = about_city
+        
+        # Distance and travel time estimates
+        if property_coords and city_coords:
+            distance_miles = self._haversine_miles(property_coords['lat'], property_coords['lon'],
+                                                   city_coords['lat'], city_coords['lon'])
+            if distance_miles is not None:
+                data['distance_city_centre'] = f"{distance_miles:.1f}"
+                car_minutes = max(5, int(round(distance_miles / 18 * 60)))
+                public_minutes = max(car_minutes + 5, int(round(car_minutes * 1.3)))
+                data['time_car'] = str(car_minutes)
+                data['time_public_transport'] = str(public_minutes)
+        elif city_coords:
+            data['distance_city_centre'] = "0"
+            data['time_car'] = "10"
+            data['time_public_transport'] = "15"
+        
+        # Nearest rail station
+        station_info = self._find_nearest_station(property_coords)
+        if station_info:
+            if station_info.get('distance_miles') is not None:
+                distance_miles = station_info['distance_miles']
+                data['station_distance'] = f"{distance_miles:.2f}"
+                walk_minutes = max(3, int(round(distance_miles / 3.0 * 60)))
+                data['walk_to_station'] = str(walk_minutes)
+            if station_info.get('name'):
+                data.setdefault('bus_routes', f"Nearest station: {station_info['name']}")
+        
+        # Bus route hints
+        bus_info = self._fetch_bus_information(property_coords)
+        if bus_info:
+            routes = bus_info.get('routes')
+            if routes:
+                data['bus_routes'] = ", ".join(routes)
+            frequency = bus_info.get('frequency')
+            if frequency:
+                data['bus_frequency'] = frequency
+        
+        defaults = {
+            'population': "N/A",
+            'distance_city_centre': "N/A",
+            'time_car': "N/A",
+            'time_public_transport': "N/A",
+            'walk_to_station': "N/A",
+            'station_distance': "N/A",
+            'bus_routes': "N/A",
+            'bus_frequency': "N/A",
+            'about_city': "Information currently unavailable."
+        }
+        for key, fallback in defaults.items():
+            data.setdefault(key, fallback)
+        
+        return {k: v for k, v in data.items() if v}
+    
+    def _apply_location_data(self, data):
+        for field, value in data.items():
+            if field not in self.entry_widgets or value is None:
+                continue
+            self._set_widget_value(field, value)
+    
+    def _get_widget_value(self, field_name):
+        widget = self.entry_widgets.get(field_name)
+        if not widget:
+            return ""
+        if isinstance(widget, tk.Text):
+            return widget.get("1.0", tk.END).strip()
+        return widget.get().strip()
+    
+    def _set_widget_value(self, field_name, value):
+        widget = self.entry_widgets.get(field_name)
+        if not widget:
+            return
+        if isinstance(widget, tk.Text):
+            widget.delete("1.0", tk.END)
+            widget.insert("1.0", value)
+        else:
+            widget.delete(0, tk.END)
+            widget.insert(0, value)
+    
+    def _infer_city_from_address(self, address):
+        if not address:
+            return ""
+        parts = [part.strip() for part in address.split(',') if part.strip()]
+        return parts[-1] if parts else ""
+    
+    def _geocode(self, query):
+        if not query:
+            return None
+        if self.http_session is None:
+            return None
+        response = self.http_session.get(
+            "https://nominatim.openstreetmap.org/search",
+            params={"q": query, "format": "json", "limit": 1, "addressdetails": 0},
+            timeout=15
+        )
+        response.raise_for_status()
+        results = response.json()
+        if not results:
+            return None
+        result = results[0]
+        try:
+            return {
+                "lat": float(result['lat']),
+                "lon": float(result['lon']),
+                "display_name": result.get('display_name', query)
+            }
+        except (KeyError, ValueError):
+            return None
+    
+    def _haversine_miles(self, lat1, lon1, lat2, lon2):
+        if None in (lat1, lon1, lat2, lon2):
+            return None
+        r = 3958.8  # Earth radius in miles
+        phi1 = math.radians(lat1)
+        phi2 = math.radians(lat2)
+        delta_phi = math.radians(lat2 - lat1)
+        delta_lambda = math.radians(lon2 - lon1)
+        a = math.sin(delta_phi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(delta_lambda / 2) ** 2
+        c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+        return r * c
+    
+    def _find_nearest_station(self, coords):
+        if not coords:
+            return None
+        query = f"""
+        [out:json][timeout:25];
+        node["railway"="station"](around:10000,{coords['lat']},{coords['lon']});
+        out body;
+        """
+        data = self._run_overpass_query(query)
+        best = None
+        for element in data.get('elements', []):
+            lat = element.get('lat')
+            lon = element.get('lon')
+            if lat is None or lon is None:
+                continue
+            distance = self._haversine_miles(coords['lat'], coords['lon'], lat, lon)
+            if distance is None:
+                continue
+            if not best or distance < best['distance_miles']:
+                best = {
+                    "name": element.get('tags', {}).get('name', 'Unnamed Station'),
+                    "distance_miles": distance
+                }
+        return best
+    
+    def _fetch_bus_information(self, coords):
+        if not coords:
+            return None
+        query = f"""
+        [out:json][timeout:25];
+        node["highway"="bus_stop"](around:1200,{coords['lat']},{coords['lon']});
+        out body;
+        """
+        data = self._run_overpass_query(query)
+        elements = data.get('elements', [])
+        if not elements:
+            return None
+        routes = set()
+        nearest_stop = None
+        nearest_distance = None
+        for element in elements:
+            tags = element.get('tags', {})
+            for key in ('route_ref', 'ref', 'bus_routes'):
+                value = tags.get(key)
+                if value:
+                    for part in value.replace('/', ';').split(';'):
+                        part = part.strip()
+                        if part:
+                            routes.add(part)
+            lat = element.get('lat')
+            lon = element.get('lon')
+            if lat is None or lon is None:
+                continue
+            distance = self._haversine_miles(coords['lat'], coords['lon'], lat, lon)
+            if distance is None:
+                continue
+            if nearest_distance is None or distance < nearest_distance:
+                nearest_distance = distance
+                nearest_stop = tags.get('name') or tags.get('ref') or "Nearby bus stop"
+        frequency_text = None
+        if nearest_distance is not None:
+            walk_minutes = max(2, int(round(nearest_distance / 3.0 * 60)))
+            frequency_text = f"{nearest_stop} (~{walk_minutes} min walk). Typical city routes run every 10–15 minutes."
+        if not routes and nearest_stop:
+            routes.add(nearest_stop)
+        if not routes:
+            return {"frequency": frequency_text} if frequency_text else None
+        return {
+            "routes": sorted(routes)[:5],
+            "frequency": frequency_text
+        }
+    
+    def _run_overpass_query(self, query):
+        if self.http_session is None:
+            return {"elements": []}
+        response = self.http_session.get(
+            "https://overpass-api.de/api/interpreter",
+            params={"data": query},
+            timeout=30
+        )
+        response.raise_for_status()
+        return response.json()
+    
+    def _fetch_city_summary(self, city):
+        if self.http_session is None:
+            return ""
+        try:
+            response = self.http_session.get(
+                f"https://en.wikipedia.org/api/rest_v1/page/summary/{city}",
+                timeout=20
+            )
+            if response.status_code != 200:
+                return ""
+            data = response.json()
+            extract = data.get('extract', '')
+            if not extract:
+                return ""
+            return extract if len(extract) <= 900 else extract[:900].rsplit(' ', 1)[0] + "..."
+        except requests.exceptions.RequestException:
+            return ""
+    
+    def _fetch_population(self, city):
+        if self.http_session is None:
+            return None
+        try:
+            page_resp = self.http_session.get(
+                "https://en.wikipedia.org/w/api.php",
+                params={
+                    "action": "query",
+                    "format": "json",
+                    "titles": city,
+                    "prop": "pageprops"
+                },
+                timeout=20
+            )
+            page_resp.raise_for_status()
+            page_data = page_resp.json()
+            pages = page_data.get('query', {}).get('pages', {})
+            if not pages:
+                return None
+            page = next(iter(pages.values()))
+            wikidata_id = page.get('pageprops', {}).get('wikibase_item')
+            if not wikidata_id:
+                return None
+            wd_resp = self.http_session.get(
+                f"https://www.wikidata.org/wiki/Special:EntityData/{wikidata_id}.json",
+                timeout=20
+            )
+            wd_resp.raise_for_status()
+            entity = wd_resp.json().get('entities', {}).get(wikidata_id, {})
+            claims = entity.get('claims', {})
+            population_claims = claims.get('P1082', [])
+            best_value = None
+            best_time = None
+            for claim in population_claims:
+                mainsnak = claim.get('mainsnak', {})
+                datavalue = mainsnak.get('datavalue', {})
+                value = datavalue.get('value')
+                if not isinstance(value, dict):
+                    continue
+                amount = value.get('amount')
+                if amount is None:
+                    continue
+                try:
+                    amount_int = int(float(amount))
+                except ValueError:
+                    continue
+                time_qualifiers = claim.get('qualifiers', {}).get('P585', [])
+                qualifier_time = None
+                if time_qualifiers:
+                    time_val = time_qualifiers[0].get('datavalue', {}).get('value', {}).get('time')
+                    qualifier_time = time_val
+                if best_value is None or (qualifier_time and qualifier_time > (best_time or "")):
+                    best_value = amount_int
+                    best_time = qualifier_time
+            return best_value
+        except requests.exceptions.RequestException:
+            return None
+    
+    def clear_image_sections(self):
+        """Remove all images from every section"""
+        for section_key in self.image_sections.keys():
+            self.image_sections[section_key].clear()
+            listbox = self.image_listboxes.get(section_key)
+            if listbox:
+                listbox.delete(0, tk.END)
+    
+    def _add_image_path(self, section_key, file_path, skip_duplicates=False, skip_if_full=False):
+        """Internal helper to add an image path to a section and update UI"""
+        images = self.image_sections.setdefault(section_key, [])
+        config = self.image_sections_config.get(section_key, {})
+        max_items = config.get('max_items')
+        
+        if skip_duplicates and file_path in images:
+            return
+        
+        if max_items and len(images) >= max_items:
+            if skip_if_full:
+                return
+            messagebox.showwarning(
+                "Image limit reached",
+                f"{config.get('title', 'This section')} allows up to {max_items} image(s)."
+            )
+            return
+        
+        images.append(file_path)
+        listbox = self.image_listboxes.get(section_key)
+        if listbox:
+            listbox.insert(tk.END, os.path.basename(file_path))
+    
+    def load_mock_data_defaults(self):
+        """Populate the form with bundled mock data for quicker previews."""
+        mock_data = {
             'address': '5, Ridley Road',
             'postal_code': 'L6 6DN',
             'property_type': 'Semi-Detached House',
@@ -624,8 +1117,6 @@ Tip: You can rename images before adding them, or use the filename as-is if it a
             'days_on_market': '6',
             'key_features': 'Spacious Three Storey HMO Property\nFive Spacious En-Suite Double Bedrooms\nFantastic Investment Opportunity\nContemporary Fitted Kitchen\nCommunal Lounge\nSunny Rear Courtyard\nYield of 10.31%\nClose To Great Local Amenities, Train Station And Road Links\nClose To City Centre\nEPC GRADE = C',
             'description': 'Beautiful semi-detached family home in excellent condition. Features include modern kitchen, spacious living areas, and a well-maintained garden. Perfect for families looking for comfort and convenience. Located in a quiet residential area with excellent transport links.',
-            
-            # Investment data
             'purchase_price': '£290,000',
             'deposit_percent': '20',
             'monthly_rent': '£2,750',
@@ -640,8 +1131,6 @@ Tip: You can rename images before adding them, or use the filename as-is if it a
             'survey_cost': '£800',
             'legal_fees': '£2,400',
             'loan_setup': '£4,640',
-            
-            # EPC data
             'epc_grade': 'C',
             'current_rating': '84',
             'potential_rating': '72',
@@ -651,8 +1140,6 @@ Tip: You can rename images before adding them, or use the filename as-is if it a
             'broadband_available': 'Broadband available',
             'download_speed': '1,800 Mbps',
             'upload_speed': '220 Mbps',
-            
-            # Location data
             'city': 'Liverpool',
             'population': '508,986',
             'distance_city_centre': '1.8',
@@ -664,20 +1151,94 @@ Tip: You can rename images before adding them, or use the filename as-is if it a
             'bus_frequency': 'Every 8 minutes',
             'about_city': 'Liverpool is a port city and metropolitan borough in Merseyside, England. It is situated on the eastern side of the Mersey Estuary, near the Irish Sea, 178 miles (286 km) north-west of London. With a population of 496,770, Liverpool is the administrative, cultural and economic centre of the Liverpool City Region, a combined authority area with a population of over 1.5 million.'
         }
+        for field_name, value in mock_data.items():
+            widget = self.entry_widgets.get(field_name)
+            if not widget:
+                continue
+            if isinstance(widget, tk.Text):
+                widget.delete("1.0", tk.END)
+                widget.insert("1.0", value)
+            else:
+                widget.delete(0, tk.END)
+                widget.insert(0, value)
+    
+    def load_default_images(self):
+        """Load bundled sample images into their sections as placeholders."""
+        sample_folder = get_resource_path("sample_images")
+        if not os.path.exists(sample_folder):
+            return
+        self.clear_image_sections()
+        image_extensions = ('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp')
+        for filename in sorted(os.listdir(sample_folder)):
+            if not filename.lower().endswith(image_extensions):
+                continue
+            image_path = os.path.join(sample_folder, filename)
+            section_key = self.get_image_section(filename)
+            self._add_image_path(section_key, image_path, skip_duplicates=True, skip_if_full=True)
+    
+    def _draw_cover_header(self, canvas, doc):
+        """Cover page handles its own branding."""
+        return
+    
+    def _draw_standard_header(self, canvas, doc):
+        """Draw consistent logo and tagline at the top of every PDF page."""
+        if not os.path.exists(self.logo_path):
+            return
+        try:
+            logo_reader = ImageReader(self.logo_path)
+            canvas.saveState()
+            img_width, img_height = logo_reader.getSize()
+            if not img_width or not img_height:
+                canvas.restoreState()
+                return
+            logo_width = 1.4 * inch
+            logo_height = logo_width * (img_height / img_width)
+            top_y = doc.pagesize[1] - doc.topMargin + 0.4 * inch
+            logo_x = doc.leftMargin
+            logo_y = top_y - logo_height
+            canvas.drawImage(
+                logo_reader,
+                logo_x,
+                logo_y,
+                width=logo_width,
+                height=logo_height,
+                mask='auto',
+                preserveAspectRatio=True
+            )
+            canvas.setFont("Helvetica", 9)
+            canvas.setFillColor(HexColor('#334155'))
+            canvas.drawString(
+                logo_x + logo_width + 12,
+                logo_y + logo_height - 6,
+                "Elevating Your Property Experience"
+            )
+            canvas.restoreState()
+        except Exception as exc:
+            print(f"Error drawing PDF header: {exc}")
+    
+    def get_image_section(self, filename):
+        """Infer the most suitable section for an image based on its filename"""
+        filename_lower = filename.lower()
+        if 'exterior' in filename_lower and 'front' in filename_lower:
+            return 'cover'
+        if 'floor' in filename_lower or 'plan' in filename_lower:
+            return 'floor_plans'
+        if 'direction' in filename_lower or 'map' in filename_lower or 'city_centre' in filename_lower:
+            return 'directions'
+        if 'city' in filename_lower or 'liverpool' in filename_lower or 'urban' in filename_lower:
+            return 'city'
+        return 'property'
+            
+    def clear_all(self):
+        """Clear all form data"""
+        for widget in self.entry_widgets.values():
+            if isinstance(widget, tk.Text):
+                widget.delete("1.0", tk.END)
+            else:
+                widget.delete(0, tk.END)
         
-        # Fill in the form fields
-        for field_name, value in sample_data.items():
-            if field_name in self.entry_widgets:
-                widget = self.entry_widgets[field_name]
-                if isinstance(widget, tk.Text):
-                    widget.delete("1.0", tk.END)
-                    widget.insert("1.0", value)
-                else:
-                    widget.delete(0, tk.END)
-                    widget.insert(0, value)
+        self.clear_image_sections()
         
-        # Load sample images
-        self.load_sample_images()
         
     def generate_pdf(self):
         """Generate the comprehensive investment report PDF with professional styling"""
@@ -714,6 +1275,12 @@ Tip: You can rename images before adding them, or use the filename as-is if it a
                                   leftMargin=0.75*inch, rightMargin=0.75*inch,
                                   topMargin=0.75*inch, bottomMargin=0.75*inch)
             story = []
+            
+            cover_images = list(self.image_sections.get('cover', []))
+            property_gallery_images = list(self.image_sections.get('property', []))
+            floor_plan_images = list(self.image_sections.get('floor_plans', []))
+            directions_images = list(self.image_sections.get('directions', []))
+            city_images = list(self.image_sections.get('city', []))
             
             # Define professional color scheme
             primary_blue = HexColor('#1e3a8a')  # Dark blue
@@ -780,17 +1347,17 @@ Tip: You can rename images before adding them, or use the filename as-is if it a
             if cover_page:
                 story.append(cover_page)
                 story.append(PageBreak())
+                story.append(Spacer(1, 0.85*inch))
             
             # Investment Opportunity Section - Second Page Design
             # Logo on left with title next to it
-            logo_path = get_resource_path("logo.png")
-            if os.path.exists(logo_path):
+            if os.path.exists(self.logo_path):
                 try:
                     # Calculate logo dimensions same as first page
-                    logo_img_pil = Image.open(logo_path)
+                    logo_img_pil = Image.open(self.logo_path)
                     logo_width = 1.5*inch
                     logo_height = logo_width * (logo_img_pil.height / logo_img_pil.width)
-                    logo_img = RLImage(logo_path, width=logo_width, height=logo_height)
+                    logo_img = RLImage(self.logo_path, width=logo_width, height=logo_height)
                     
                     # Create header table with logo on left and title on right
                     title_para = Paragraph("Investment Opportunity", 
@@ -1028,43 +1595,17 @@ Tip: You can rename images before adding them, or use the filename as-is if it a
             
             # Page break before Key Information section
             story.append(PageBreak())
+            story.append(Spacer(1, 0.85*inch))
             
             # Key Information Section - Third Page Design (all content on one page)
             # Collect all content first, then wrap in KeepTogether
             key_info_content = []
             
-            # Logo on left with "Key Information" title
-            logo_path = get_resource_path("logo.png")
-            if os.path.exists(logo_path):
-                try:
-                    # Calculate logo dimensions same as first page
-                    logo_img_pil = Image.open(logo_path)
-                    logo_width = 1.5*inch
-                    logo_height = logo_width * (logo_img_pil.height / logo_img_pil.width)
-                    logo_img = RLImage(logo_path, width=logo_width, height=logo_height)
-                    
-                    # Create header table with logo on left and title on right
-                    key_info_title_para = Paragraph("Key Information", 
-                        ParagraphStyle('KeyInfoTitle', parent=styles['Heading1'], fontSize=24, 
-                                      textColor=colors.black, fontName='Helvetica-Bold'))
-                    
-                    header_table = Table([[logo_img, key_info_title_para]], colWidths=[2*inch, 5*inch])
-                    header_table.setStyle(TableStyle([
-                        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                        ('ALIGN', (0, 0), (0, 0), 'LEFT'),
-                        ('ALIGN', (1, 0), (1, 0), 'LEFT'),
-                        ('LEFTPADDING', (0, 0), (0, 0), 0),
-                        ('RIGHTPADDING', (0, 0), (0, 0), 10),
-                        ('LEFTPADDING', (1, 0), (1, 0), 10),
-                        ('TOPPADDING', (0, 0), (-1, -1), 5),
-                        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
-                    ]))
-                    key_info_content.append(header_table)
-                except Exception as e:
-                    print(f"Error loading logo: {e}")
-                    key_info_content.append(Paragraph("Key Information", header_style))
-            else:
-                key_info_content.append(Paragraph("Key Information", header_style))
+            key_info_content.append(Paragraph(
+                '<para align="left"><b>Key Information</b></para>',
+                ParagraphStyle('KeyInfoTitle', parent=styles['Heading1'], fontSize=24,
+                              textColor=colors.black, alignment=TA_LEFT)
+            ))
             
             key_info_content.append(Spacer(1, 15))
             
@@ -1073,51 +1614,37 @@ Tip: You can rename images before adding them, or use the filename as-is if it a
             img_height = 3.5*inch
             main_img_path = None
             
-            if self.images:
+            candidate_images = cover_images + property_gallery_images
+            if candidate_images:
                 try:
-                    # Filter out images that shouldn't be shown here
-                    eligible_images = []
-                    for img_path in self.images:
-                        filename = os.path.basename(img_path).lower()
-                        # Exclude directions, map, liverpool, floorplan images
-                        if not ('direction' in filename or 'map' in filename or 'city' in filename or 
-                                'liverpool' in filename or 'floor' in filename or 'plan' in filename):
-                            eligible_images.append(img_path)
-                    
-                    # Find exterior front image or use first eligible image
-                    for img_path in eligible_images:
+                    for img_path in candidate_images:
                         filename = os.path.basename(img_path).lower()
                         if 'exterior' in filename and 'front' in filename:
                             main_img_path = img_path
                             break
-                    if not main_img_path and eligible_images:
-                        main_img_path = eligible_images[0]
+                    if not main_img_path:
+                        main_img_path = candidate_images[0]
                     
                     if main_img_path and os.path.exists(main_img_path):
-                        # Display image (reduced size to fit on one page)
                         property_img_pil = Image.open(main_img_path)
                         img_aspect = property_img_pil.width / property_img_pil.height
                         img_width = 6.5*inch  # Slightly smaller to fit
                         img_height = img_width / img_aspect
-                        # Limit height to ensure it fits
                         if img_height > 3.5*inch:
                             img_height = 3.5*inch
                             img_width = img_height * img_aspect
                         property_img = RLImage(main_img_path, width=img_width, height=img_height)
                         key_info_content.append(property_img)
                     else:
-                        # Use placeholder
                         placeholder = create_placeholder_drawing(img_width, img_height)
                         key_info_content.append(placeholder)
                     key_info_content.append(Spacer(1, 15))
                 except Exception as e:
                     print(f"Error loading property image: {e}")
-                    # Use placeholder on error
                     placeholder = create_placeholder_drawing(img_width, img_height)
                     key_info_content.append(placeholder)
                     key_info_content.append(Spacer(1, 15))
             else:
-                # No images - use placeholder
                 placeholder = create_placeholder_drawing(img_width, img_height)
                 key_info_content.append(placeholder)
                 key_info_content.append(Spacer(1, 15))
@@ -1179,13 +1706,12 @@ Tip: You can rename images before adding them, or use the filename as-is if it a
             story.append(PageBreak())
             
             # Other Key Information Page Header
-            logo_path = get_resource_path("logo.png")
-            if os.path.exists(logo_path):
+            if os.path.exists(self.logo_path):
                 try:
-                    logo_img_pil = Image.open(logo_path)
+                    logo_img_pil = Image.open(self.logo_path)
                     logo_width = 1.5*inch
                     logo_height = logo_width * (logo_img_pil.height / logo_img_pil.width)
-                    logo_img = RLImage(logo_path, width=logo_width, height=logo_height)
+                    logo_img = RLImage(self.logo_path, width=logo_width, height=logo_height)
                     
                     # Create header table with logo on left and title centered
                     other_key_title_para = Paragraph("Other Key Information", 
@@ -1218,51 +1744,37 @@ Tip: You can rename images before adding them, or use the filename as-is if it a
             img_height = 3.5*inch
             main_img_path = None
             
-            if self.images:
+            candidate_images = cover_images + property_gallery_images
+            if candidate_images:
                 try:
-                    # Filter out images that shouldn't be shown here
-                    eligible_images = []
-                    for img_path in self.images:
-                        filename = os.path.basename(img_path).lower()
-                        # Exclude directions, map, liverpool, floorplan images
-                        if not ('direction' in filename or 'map' in filename or 'city' in filename or 
-                                'liverpool' in filename or 'floor' in filename or 'plan' in filename):
-                            eligible_images.append(img_path)
-                    
-                    # Find exterior front image or use first eligible image
-                    for img_path in eligible_images:
+                    for img_path in candidate_images:
                         filename = os.path.basename(img_path).lower()
                         if 'exterior' in filename and 'front' in filename:
                             main_img_path = img_path
                             break
-                    if not main_img_path and eligible_images:
-                        main_img_path = eligible_images[0]
+                    if not main_img_path:
+                        main_img_path = candidate_images[0]
                     
                     if main_img_path and os.path.exists(main_img_path):
-                        # Display large image
                         property_img_pil = Image.open(main_img_path)
                         img_aspect = property_img_pil.width / property_img_pil.height
                         img_width = 7*inch  # Full width
                         img_height = img_width / img_aspect
-                        # Limit height to ensure it fits nicely
                         if img_height > 3.5*inch:
                             img_height = 3.5*inch
                             img_width = img_height * img_aspect
                         property_img = RLImage(main_img_path, width=img_width, height=img_height)
                         story.append(property_img)
                     else:
-                        # Use placeholder
                         placeholder = create_placeholder_drawing(img_width, img_height)
                         story.append(placeholder)
                     story.append(Spacer(1, 20))
                 except Exception as e:
                     print(f"Error loading property image: {e}")
-                    # Use placeholder on error
                     placeholder = create_placeholder_drawing(img_width, img_height)
                     story.append(placeholder)
                     story.append(Spacer(1, 20))
             else:
-                # No images - use placeholder
                 placeholder = create_placeholder_drawing(img_width, img_height)
                 story.append(placeholder)
                 story.append(Spacer(1, 20))
@@ -1351,62 +1863,24 @@ Tip: You can rename images before adding them, or use the filename as-is if it a
                 story.append(Spacer(1, 20))
             
             # Floor Plans Section - always show at least one placeholder if no floor plans
-            floor_plan_images = []
-            if self.images:
-                # Filter floor plan images
-                for img_path in self.images:
-                    filename = os.path.basename(img_path).lower()
-                    if 'floor' in filename or 'plan' in filename:
-                        floor_plan_images.append(img_path)
+            floor_plan_queue = floor_plan_images if floor_plan_images else [None]
             
-            # Always show at least one floor plan (placeholder if none available)
-            if not floor_plan_images:
-                floor_plan_images = [None]  # Use None as placeholder marker
-            
-            if floor_plan_images:
-                # Add Floor Plans header with logo on first page only
+            if floor_plan_queue:
                 story.append(PageBreak())
+                story.append(Spacer(1, 0.85*inch))
                 
-                # Logo on left with "Floor Plans" title
-                logo_path = get_resource_path("logo.png")
-                if os.path.exists(logo_path):
-                    try:
-                        # Calculate logo dimensions same as first page
-                        logo_img_pil = Image.open(logo_path)
-                        logo_width = 1.5*inch
-                        logo_height = logo_width * (logo_img_pil.height / logo_img_pil.width)
-                        logo_img = RLImage(logo_path, width=logo_width, height=logo_height)
-                        
-                        # Create header table with logo on left and title on right
-                        floor_plans_title_para = Paragraph("Floor Plans", 
-                            ParagraphStyle('FloorPlansTitle', parent=styles['Heading1'], fontSize=24, 
-                                          textColor=colors.black, fontName='Helvetica-Bold'))
-                        
-                        header_table = Table([[logo_img, floor_plans_title_para]], colWidths=[2*inch, 5*inch])
-                        header_table.setStyle(TableStyle([
-                            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                            ('ALIGN', (0, 0), (0, 0), 'LEFT'),
-                            ('ALIGN', (1, 0), (1, 0), 'LEFT'),
-                            ('LEFTPADDING', (0, 0), (0, 0), 0),
-                            ('RIGHTPADDING', (0, 0), (0, 0), 10),
-                            ('LEFTPADDING', (1, 0), (1, 0), 10),
-                            ('TOPPADDING', (0, 0), (-1, -1), 5),
-                            ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
-                        ]))
-                        story.append(header_table)
-                        story.append(Spacer(1, 20))
-                    except Exception as e:
-                        print(f"Error loading logo: {e}")
-                        story.append(Paragraph("Floor Plans", header_style))
-                        story.append(Spacer(1, 20))
-                else:
-                    story.append(Paragraph("Floor Plans", header_style))
-                    story.append(Spacer(1, 20))
+                story.append(Paragraph(
+                    '<para align="left"><b>Floor Plans</b></para>',
+                    ParagraphStyle('FloorPlansTitleText', parent=styles['Heading1'], fontSize=24,
+                                   textColor=colors.black, alignment=TA_LEFT)
+                ))
+                story.append(Spacer(1, 12))
                 
-                for i, image_path in enumerate(floor_plan_images):
+                for i, image_path in enumerate(floor_plan_queue):
                     # For subsequent floor plans, add page break (but not for the first one, since we already added it)
                     if i > 0:
                         story.append(PageBreak())
+                        story.append(Spacer(1, 0.85*inch))
                     
                     if image_path is None:
                         # Use placeholder
@@ -1486,19 +1960,10 @@ Tip: You can rename images before adding them, or use the filename as-is if it a
                             ]))
                             story.append(center_table)
             
-            # Property Images (excluding floor plans, directions, and Liverpool images)
-            # Always show at least one placeholder if no images
-            regular_images = []
-            if self.images:
-                # Filter out floor plan images, directions image, and Liverpool images (they're already shown in their sections)
-                for img_path in self.images:
-                    filename = os.path.basename(img_path).lower()
-                    if ('floor' not in filename and 'plan' not in filename and 
-                        'direction' not in filename and 'map' not in filename and 'city' not in filename and
-                        'liverpool' not in filename):
-                        regular_images.append(img_path)
-            
-            # Always show property images section (with placeholder if empty)
+            # Property Images Gallery - defaults to cover images if gallery is empty
+            regular_images = list(property_gallery_images)
+            if not regular_images:
+                regular_images = list(cover_images)
             if not regular_images:
                 regular_images = [None]  # Use None as placeholder marker
             
@@ -1543,48 +2008,16 @@ Tip: You can rename images before adding them, or use the filename as-is if it a
             story.append(PageBreak())
             
             # Location Information - Logo, Title, and Directions Image
-            logo_path = get_resource_path("logo.png")
-            if os.path.exists(logo_path):
-                try:
-                    logo_img_pil = Image.open(logo_path)
-                    logo_width = 1.5*inch
-                    logo_height = logo_width * (logo_img_pil.height / logo_img_pil.width)
-                    logo_img = RLImage(logo_path, width=logo_width, height=logo_height)
-                    
-                    # Create header table with logo on left and title centered
-                    city_centre_title_para = Paragraph("Getting To The City Centre", 
-                        ParagraphStyle('CityCentreTitle', parent=styles['Heading1'], fontSize=24, 
-                                      textColor=colors.black, fontName='Helvetica-Bold',
-                                      alignment=1))  # 1 = TA_CENTER
-                    
-                    header_table = Table([[logo_img, city_centre_title_para]], colWidths=[2*inch, 5*inch])
-                    header_table.setStyle(TableStyle([
-                        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                        ('ALIGN', (0, 0), (0, 0), 'LEFT'),
-                        ('ALIGN', (1, 0), (1, 0), 'CENTER'),
-                        ('LEFTPADDING', (0, 0), (0, 0), 0),
-                        ('RIGHTPADDING', (0, 0), (0, 0), 10),
-                        ('LEFTPADDING', (1, 0), (1, 0), 10),
-                        ('TOPPADDING', (0, 0), (-1, -1), 5),
-                        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
-                    ]))
-                    story.append(header_table)
-                except Exception as e:
-                    print(f"Error loading logo: {e}")
-                    story.append(Paragraph("Getting To The City Centre", header_style))
-            else:
-                story.append(Paragraph("Getting To The City Centre", header_style))
+            story.append(Paragraph(
+                '<para align="left"><b>Getting To The City Centre</b></para>',
+                ParagraphStyle('CityCentreTitle', parent=styles['Heading1'], fontSize=24,
+                              textColor=colors.black, alignment=TA_LEFT)
+            ))
             
             story.append(Spacer(1, 20))
             
             # Directions Image
-            directions_image_path = None
-            # Check if directions image exists in images list
-            for img_path in self.images:
-                filename = os.path.basename(img_path).lower()
-                if 'direction' in filename or 'map' in filename or 'city' in filename:
-                    directions_image_path = img_path
-                    break
+            directions_image_path = next(iter(directions_images), None)
             
             # If not found in images list, check sample_images folder
             if not directions_image_path:
@@ -1629,7 +2062,7 @@ Tip: You can rename images before adding them, or use the filename as-is if it a
             
             story.append(Spacer(1, 15))
             
-            # About the City and Liverpool Pictures - keep together on same page
+            # About the City and City Images - keep together on same page
             about_city_content = []
             
             # About the City
@@ -1640,16 +2073,11 @@ Tip: You can rename images before adding them, or use the filename as-is if it a
                 about_city_content.append(Paragraph(f"<b>Population:</b> {data.get('population', 'N/A')}", body_style))
                 about_city_content.append(Spacer(1, 10))
             
-            # Liverpool Pictures Section
-            liverpool_images = []
-            # Check if Liverpool images exist in images list
-            for img_path in self.images:
-                filename = os.path.basename(img_path).lower()
-                if 'liverpool' in filename:
-                    liverpool_images.append(img_path)
+            # City Images Section
+            city_queue = list(city_images)
             
-            # If not found in images list, check sample_images folder
-            if not liverpool_images:
+            # If not provided, fall back to bundled sample images
+            if not city_queue:
                 sample_paths = [
                     get_resource_path("sample_images/liverpool1.jpg"),
                     get_resource_path("sample_images/liverpool2.jpg"),
@@ -1657,19 +2085,19 @@ Tip: You can rename images before adding them, or use the filename as-is if it a
                 ]
                 for path in sample_paths:
                     if os.path.exists(path):
-                        liverpool_images.append(path)
+                        city_queue.append(path)
             
-            # Always show Liverpool images (placeholders if not found)
+            # Always show City images (placeholders if not found)
             fixed_width = 2.3*inch
             fixed_height = 2.3*inch
             
-            # Always show 3 Liverpool images (placeholders if missing)
-            while len(liverpool_images) < 3:
-                liverpool_images.append(None)
+            # Always show 3 City images (placeholders if missing)
+            while len(city_queue) < 3:
+                city_queue.append(None)
             
             # Display 3 images horizontally
             img_cells = []
-            for img_path in liverpool_images[:3]:
+            for img_path in city_queue[:3]:
                 if img_path is None:
                     # Use placeholder
                     placeholder = create_placeholder_drawing(fixed_width, fixed_height)
@@ -1685,20 +2113,20 @@ Tip: You can rename images before adding them, or use the filename as-is if it a
                             placeholder = create_placeholder_drawing(fixed_width, fixed_height)
                             img_cells.append(placeholder)
                     except Exception as e:
-                        print(f"Error loading Liverpool image {img_path}: {e}")
+                        print(f"Error loading city image {img_path}: {e}")
                         # Use placeholder on error
                         placeholder = create_placeholder_drawing(fixed_width, fixed_height)
                         img_cells.append(placeholder)
             
             if len(img_cells) == 3:
-                liverpool_table = Table([img_cells], colWidths=[fixed_width, fixed_width, fixed_width])
-                liverpool_table.setStyle(TableStyle([
+                city_table = Table([img_cells], colWidths=[fixed_width, fixed_width, fixed_width])
+                city_table.setStyle(TableStyle([
                     ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
                     ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
                     ('TOPPADDING', (0, 0), (-1, -1), 5),
                     ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
                 ]))
-                about_city_content.append(liverpool_table)
+                about_city_content.append(city_table)
             
             about_city_content.append(Spacer(1, 15))
             
@@ -1706,7 +2134,11 @@ Tip: You can rename images before adding them, or use the filename as-is if it a
             story.append(KeepTogether(about_city_content))
             
             # Build PDF
-            doc.build(story)
+            doc.build(
+                story,
+                onFirstPage=self._draw_cover_header,
+                onLaterPages=self._draw_standard_header
+            )
             
         except Exception as e:
             print(f"Error generating PDF: {e}")
@@ -1715,8 +2147,8 @@ Tip: You can rename images before adding them, or use the filename as-is if it a
     def create_cover_page(self, data, accent_gold, primary_blue):
         """Create the cover page with logo, property address, main image, thumbnails, and footer"""
         # Always create cover page, even if no images (will use placeholders)
-        images = self.images if self.images else []
-        return CoverPageFlowable(data, images, accent_gold, primary_blue)
+        images_by_section = {key: list(paths) for key, paths in self.image_sections.items()}
+        return CoverPageFlowable(data, images_by_section, accent_gold, primary_blue)
             
     def create_header(self, data, accent_gold, primary_blue):
         """Create a professional header with branding"""
