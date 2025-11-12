@@ -123,6 +123,9 @@ jobs:
           # Move the executable
           mv dist/PropertyPDFBuilder/PropertyPDFBuilder dist/PropertyPDFBuilder.app/Contents/MacOS/
           
+          # CRITICAL: Set executable permissions on the binary
+          chmod +x dist/PropertyPDFBuilder.app/Contents/MacOS/PropertyPDFBuilder
+          
           # Move all other files to Resources
           mv dist/PropertyPDFBuilder/* dist/PropertyPDFBuilder.app/Contents/Resources/ 2>/dev/null || true
           
@@ -150,12 +153,35 @@ jobs:
           
           # Remove the old directory
           rmdir dist/PropertyPDFBuilder 2>/dev/null || rm -rf dist/PropertyPDFBuilder
+          
+          # Verify the app bundle structure
+          echo "App bundle created. Verifying structure..."
+          ls -la dist/PropertyPDFBuilder.app/Contents/MacOS/
+          file dist/PropertyPDFBuilder.app/Contents/MacOS/PropertyPDFBuilder
         fi
     
     - name: Create DMG
       run: |
         if [ -d "dist/PropertyPDFBuilder.app" ]; then
-          hdiutil create -volname "Property PDF Builder" -srcfolder dist/PropertyPDFBuilder.app -ov -format UDZO dist/PropertyPDFBuilder.dmg || echo "DMG creation failed, but app bundle exists"
+          # Create a temporary directory for DMG contents
+          mkdir -p dist/dmg_contents
+          
+          # Copy app to DMG directory
+          cp -R dist/PropertyPDFBuilder.app dist/dmg_contents/
+          
+          # Copy installation instructions
+          if [ -f "MACOS_INSTALL_INSTRUCTIONS.md" ]; then
+            cp MACOS_INSTALL_INSTRUCTIONS.md dist/dmg_contents/INSTALL_INSTRUCTIONS.txt
+          fi
+          
+          # Create symbolic link to Applications folder (standard macOS DMG practice)
+          ln -s /Applications dist/dmg_contents/Applications
+          
+          # Create DMG with proper formatting
+          hdiutil create -volname "Property PDF Builder" -srcfolder dist/dmg_contents -ov -format UDZO dist/PropertyPDFBuilder.dmg || echo "DMG creation failed, but app bundle exists"
+          
+          # Clean up
+          rm -rf dist/dmg_contents
         fi
     
     - name: Upload macOS app bundle
