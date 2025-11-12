@@ -61,8 +61,8 @@ class CoverPageFlowable(Flowable):
         # A4 is 595.28 x 841.89 points
         # So available space is: 475.28 x 721.89 points
         # Convert to inches: 475.28/72 = 6.6 inches, 721.89/72 = 10.0 inches
-        # Use conservative margin: 1.8 inches total (0.9 per side) to ensure fit
-        margin_total = 1.8*inch
+        # Increase internal margins so the flowable fits within the document frame
+        margin_total = 2.4*inch
         self.width = A4[0] - margin_total
         self.height = A4[1] - margin_total
         
@@ -1193,9 +1193,10 @@ class PDFBuilderApp:
                 return
             logo_width = 1.4 * inch
             logo_height = logo_width * (img_height / img_width)
-            top_y = doc.pagesize[1] - doc.topMargin + 0.4 * inch
+            page_width, page_height = doc.pagesize
+            header_top = page_height - 0.45 * inch
             logo_x = doc.leftMargin
-            logo_y = top_y - logo_height
+            logo_y = header_top - logo_height
             canvas.drawImage(
                 logo_reader,
                 logo_x,
@@ -1208,8 +1209,8 @@ class PDFBuilderApp:
             canvas.setFont("Helvetica", 9)
             canvas.setFillColor(HexColor('#334155'))
             canvas.drawString(
-                logo_x + logo_width + 12,
-                logo_y + logo_height - 6,
+                logo_x,
+                logo_y - 12,
                 "Elevating Your Property Experience"
             )
             canvas.restoreState()
@@ -1271,9 +1272,14 @@ class PDFBuilderApp:
             print(f"Generating PDF: {file_path}")
             
             # Create PDF document with custom margins
-            doc = SimpleDocTemplate(file_path, pagesize=A4, 
-                                  leftMargin=0.75*inch, rightMargin=0.75*inch,
-                                  topMargin=0.75*inch, bottomMargin=0.75*inch)
+            doc = SimpleDocTemplate(
+                file_path,
+                pagesize=A4,
+                leftMargin=0.75*inch,
+                rightMargin=0.75*inch,
+                topMargin=1.15*inch,
+                bottomMargin=0.75*inch
+            )
             story = []
             
             cover_images = list(self.image_sections.get('cover', []))
@@ -1341,66 +1347,27 @@ class PDFBuilderApp:
                 textColor=primary_blue,
                 fontName='Helvetica-Bold'
             )
+
+            section_title_style = ParagraphStyle(
+                'SectionTitle',
+                parent=styles['Heading1'],
+                fontSize=24,
+                spaceAfter=18,
+                textColor=colors.black,
+                fontName='Helvetica-Bold',
+                alignment=TA_LEFT
+            )
             
             # Create cover page (first page)
             cover_page = self.create_cover_page(data, accent_gold, primary_blue)
             if cover_page:
                 story.append(cover_page)
                 story.append(PageBreak())
-                story.append(Spacer(1, 0.85*inch))
+                story.append(Spacer(1, 0.75*inch))
             
             # Investment Opportunity Section - Second Page Design
-            # Logo on left with title next to it
-            if os.path.exists(self.logo_path):
-                try:
-                    # Calculate logo dimensions same as first page
-                    logo_img_pil = Image.open(self.logo_path)
-                    logo_width = 1.5*inch
-                    logo_height = logo_width * (logo_img_pil.height / logo_img_pil.width)
-                    logo_img = RLImage(self.logo_path, width=logo_width, height=logo_height)
-                    
-                    # Create header table with logo on left and title on right
-                    title_para = Paragraph("Investment Opportunity", 
-                        ParagraphStyle('InvestmentTitle', parent=styles['Heading1'], fontSize=24, 
-                                      textColor=colors.black, fontName='Helvetica-Bold'))
-                    
-                    header_table = Table([[logo_img, title_para]], colWidths=[2*inch, 5*inch])
-                    header_table.setStyle(TableStyle([
-                        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                        ('ALIGN', (0, 0), (0, 0), 'LEFT'),
-                        ('ALIGN', (1, 0), (1, 0), 'LEFT'),
-                        ('LEFTPADDING', (0, 0), (0, 0), 0),
-                        ('RIGHTPADDING', (0, 0), (0, 0), 10),
-                        ('LEFTPADDING', (1, 0), (1, 0), 10),
-                        ('TOPPADDING', (0, 0), (-1, -1), 5),
-                        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
-                    ]))
-                    story.append(header_table)
-                except Exception as e:
-                    print(f"Error loading logo: {e}")
-                    # Fallback to just title
-                    investment_title_style = ParagraphStyle(
-                        'InvestmentTitle',
-                        parent=styles['Heading1'],
-                        fontSize=24,
-                        spaceAfter=25,
-                        textColor=colors.black,
-                        fontName='Helvetica-Bold'
-                    )
-                    story.append(Paragraph("Investment Opportunity", investment_title_style))
-            else:
-                # Just title if no logo
-                investment_title_style = ParagraphStyle(
-                    'InvestmentTitle',
-                    parent=styles['Heading1'],
-                    fontSize=24,
-                    spaceAfter=25,
-                    textColor=colors.black,
-                    fontName='Helvetica-Bold'
-                )
-                story.append(Paragraph("Investment Opportunity", investment_title_style))
-            
-            story.append(Spacer(1, 20))
+            story.append(Paragraph("Investment Opportunity", section_title_style))
+            story.append(Spacer(1, 16))
             
             # Calculate investment metrics
             try:
@@ -1591,11 +1558,11 @@ class PDFBuilderApp:
             
             # Use KeepTogether to ensure profit boxes stay on same page as costs table
             # Include spacer to push profit boxes toward bottom
-            story.append(KeepTogether([two_col_table, Spacer(1, 2*inch), profit_table]))
+            story.append(KeepTogether([two_col_table, Spacer(1, 0.5*inch), profit_table]))
             
             # Page break before Key Information section
             story.append(PageBreak())
-            story.append(Spacer(1, 0.85*inch))
+            story.append(Spacer(1, 0.75*inch))
             
             # Key Information Section - Third Page Design (all content on one page)
             # Collect all content first, then wrap in KeepTogether
@@ -1704,40 +1671,12 @@ class PDFBuilderApp:
             
             # Page break after Key Information page
             story.append(PageBreak())
+            story.append(Spacer(1, 0.75*inch))
             
             # Other Key Information Page Header
-            if os.path.exists(self.logo_path):
-                try:
-                    logo_img_pil = Image.open(self.logo_path)
-                    logo_width = 1.5*inch
-                    logo_height = logo_width * (logo_img_pil.height / logo_img_pil.width)
-                    logo_img = RLImage(self.logo_path, width=logo_width, height=logo_height)
-                    
-                    # Create header table with logo on left and title centered
-                    other_key_title_para = Paragraph("Other Key Information", 
-                        ParagraphStyle('OtherKeyTitle', parent=styles['Heading1'], fontSize=24, 
-                                      textColor=colors.black, fontName='Helvetica-Bold',
-                                      alignment=1))  # 1 = TA_CENTER
-                    
-                    header_table = Table([[logo_img, other_key_title_para]], colWidths=[2*inch, 5*inch])
-                    header_table.setStyle(TableStyle([
-                        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                        ('ALIGN', (0, 0), (0, 0), 'LEFT'),
-                        ('ALIGN', (1, 0), (1, 0), 'CENTER'),
-                        ('LEFTPADDING', (0, 0), (0, 0), 0),
-                        ('RIGHTPADDING', (0, 0), (0, 0), 10),
-                        ('LEFTPADDING', (1, 0), (1, 0), 10),
-                        ('TOPPADDING', (0, 0), (-1, -1), 5),
-                        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
-                    ]))
-                    story.append(header_table)
-                except Exception as e:
-                    print(f"Error loading logo: {e}")
-                    story.append(Paragraph("Other Key Information", header_style))
-            else:
-                story.append(Paragraph("Other Key Information", header_style))
-            
-            story.append(Spacer(1, 20))
+            other_key_content = []
+            other_key_content.append(Paragraph("Other Key Information", section_title_style))
+            other_key_content.append(Spacer(1, 18))
             
             # Large Property Image below header - always show, use placeholder if missing
             img_width = 7*inch
@@ -1760,34 +1699,31 @@ class PDFBuilderApp:
                         img_aspect = property_img_pil.width / property_img_pil.height
                         img_width = 7*inch  # Full width
                         img_height = img_width / img_aspect
-                        if img_height > 3.5*inch:
-                            img_height = 3.5*inch
+                        if img_height > 3.3*inch:
+                            img_height = 3.3*inch
                             img_width = img_height * img_aspect
                         property_img = RLImage(main_img_path, width=img_width, height=img_height)
-                        story.append(property_img)
+                        other_key_content.append(property_img)
                     else:
                         placeholder = create_placeholder_drawing(img_width, img_height)
-                        story.append(placeholder)
-                    story.append(Spacer(1, 20))
+                        other_key_content.append(placeholder)
                 except Exception as e:
                     print(f"Error loading property image: {e}")
                     placeholder = create_placeholder_drawing(img_width, img_height)
-                    story.append(placeholder)
-                    story.append(Spacer(1, 20))
+                    other_key_content.append(placeholder)
             else:
                 placeholder = create_placeholder_drawing(img_width, img_height)
-                story.append(placeholder)
-                story.append(Spacer(1, 20))
+                other_key_content.append(placeholder)
+            
+            other_key_content.append(Spacer(1, 18))
             
             # EPC Section - Horizontal Layout: Title (left) | Chart (middle) | Details (right)
             epc_title_para = Paragraph("Energy Performance Certificate", 
                 ParagraphStyle('EPCTitle', parent=styles['Heading2'], fontSize=14, 
                               textColor=colors.black, fontName='Helvetica-Bold'))
             
-            # Create EPC visual chart (vertical bars)
             epc_chart = self.create_epc_chart(data, primary_blue, accent_gold, success_green)
             
-            # EPC Details (right side)
             epc_details_para = Paragraph(
                 f"<b>Latest available inspection date</b><br/>"
                 f"{data.get('inspection_date', 'N/A')}<br/><br/>"
@@ -1799,36 +1735,32 @@ class PDFBuilderApp:
                               fontSize=11, textColor=colors.black,
                               leftIndent=0))
             
-            # Create horizontal table for EPC section
             epc_table = Table([[epc_title_para, epc_chart, epc_details_para]], 
-                             colWidths=[2*inch, 3.5*inch, 2.5*inch])
+                             colWidths=[2*inch, 3.3*inch, 2.3*inch])
             epc_table.setStyle(TableStyle([
                 ('VALIGN', (0, 0), (-1, -1), 'TOP'),
                 ('ALIGN', (0, 0), (0, 0), 'LEFT'),
                 ('ALIGN', (1, 0), (1, 0), 'CENTER'),
                 ('ALIGN', (2, 0), (2, 0), 'LEFT'),
-                ('TOPPADDING', (0, 0), (0, 0), 20),  # More padding for title column
-                ('TOPPADDING', (1, 0), (2, 0), 10),  # Regular padding for other columns
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
+                ('TOPPADDING', (0, 0), (0, 0), 14),
+                ('TOPPADDING', (1, 0), (2, 0), 6),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
             ]))
-            story.append(epc_table)
-            story.append(Spacer(1, 10))
+            other_key_content.append(epc_table)
+            other_key_content.append(Spacer(1, 10))
             
-            # Disclaimer text in grey
             disclaimer_para = Paragraph(
                 "This EPC data is accurate up to 6 months ago. If a more recent EPC assessment was done within this period, it will not be displayed here.",
                 ParagraphStyle('EPCDisclaimer', parent=styles['Normal'], 
                               fontSize=9, textColor=HexColor('#666666')))
-            story.append(disclaimer_para)
-            story.append(Spacer(1, 20))
+            other_key_content.append(disclaimer_para)
+            other_key_content.append(Spacer(1, 16))
             
-            # Internet / Broadband Availability - Horizontal Layout
             if data.get('broadband_available'):
                 broadband_title_para = Paragraph("Internet / Broadband Availability", 
                     ParagraphStyle('BroadbandTitle', parent=styles['Heading2'], fontSize=14, 
                                   textColor=colors.black, fontName='Helvetica-Bold'))
                 
-                # Create three horizontal items (values are bold, not labels)
                 broadband_item1 = Paragraph(
                     f"Broadband available<br/><b>{data.get('broadband_available', 'N/A')}</b>",
                     ParagraphStyle('BroadbandItem', parent=styles['Normal'], 
@@ -1844,30 +1776,30 @@ class PDFBuilderApp:
                     ParagraphStyle('BroadbandItem', parent=styles['Normal'], 
                                   fontSize=11, textColor=colors.black))
                 
-                # Create horizontal table for broadband info (title row, then three items)
                 broadband_table = Table([
                     [broadband_title_para, '', ''],
                     [broadband_item1, broadband_item2, broadband_item3]
                 ], colWidths=[2.3*inch, 2.3*inch, 2.4*inch])
                 broadband_table.setStyle(TableStyle([
-                    ('SPAN', (0, 0), (-1, 0)),  # Title spans all columns
+                    ('SPAN', (0, 0), (-1, 0)),
                     ('VALIGN', (0, 0), (-1, -1), 'TOP'),
                     ('ALIGN', (0, 0), (0, 0), 'LEFT'),
                     ('ALIGN', (0, 1), (-1, 1), 'LEFT'),
-                    ('TOPPADDING', (0, 0), (-1, 0), 5),
-                    ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
-                    ('TOPPADDING', (0, 1), (-1, 1), 5),
-                    ('BOTTOMPADDING', (0, 1), (-1, 1), 5),
+                    ('TOPPADDING', (0, 0), (-1, 0), 4),
+                    ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+                    ('TOPPADDING', (0, 1), (-1, 1), 4),
+                    ('BOTTOMPADDING', (0, 1), (-1, 1), 6),
                 ]))
-                story.append(broadband_table)
-                story.append(Spacer(1, 20))
+                other_key_content.append(broadband_table)
+            
+            story.append(KeepTogether(other_key_content))
             
             # Floor Plans Section - always show at least one placeholder if no floor plans
             floor_plan_queue = floor_plan_images if floor_plan_images else [None]
             
             if floor_plan_queue:
                 story.append(PageBreak())
-                story.append(Spacer(1, 0.85*inch))
+                story.append(Spacer(1, 0.75*inch))
                 
                 story.append(Paragraph(
                     '<para align="left"><b>Floor Plans</b></para>',
@@ -1969,43 +1901,44 @@ class PDFBuilderApp:
             
             if regular_images:
                 story.append(PageBreak())
+                story.append(Spacer(1, 0.75*inch))
                 story.append(Paragraph("Property Images", header_style))
+                story.append(Spacer(1, 0.35*inch))
                 
+                image_blocks = []
                 for i, image_path in enumerate(regular_images):
+                    caption_text = f"Image {i+1}: Placeholder"
+                    
                     if image_path is None:
-                        # Use placeholder
-                        placeholder = create_placeholder_drawing(6*inch, 4*inch)
-                        story.append(placeholder)
-                        story.append(Spacer(1, 12))
-                        story.append(Paragraph(f"Image {i+1}: Placeholder", body_style))
-                        story.append(Spacer(1, 20))
+                        img_flowable = create_placeholder_drawing(6*inch, 3.5*inch)
                     else:
                         try:
-                            # Add image with caption
                             if os.path.exists(image_path):
-                                img = RLImage(image_path, width=6*inch, height=4*inch)
+                                img_flowable = RLImage(image_path, width=6*inch, height=3.5*inch)
+                                caption_text = f"Image {i+1}: {os.path.basename(image_path)}"
                             else:
-                                # Use placeholder if file doesn't exist
-                                img = create_placeholder_drawing(6*inch, 4*inch)
-                            story.append(img)
-                            story.append(Spacer(1, 12))
-                            
-                            # Add caption
-                            filename = os.path.basename(image_path)
-                            story.append(Paragraph(f"Image {i+1}: {filename}", body_style))
-                            story.append(Spacer(1, 20))
-                            
+                                img_flowable = create_placeholder_drawing(6*inch, 3.5*inch)
+                                caption_text = f"Image {i+1}: File not found"
                         except Exception as e:
                             print(f"Error adding image {image_path}: {e}")
-                            # Use placeholder on error
-                            placeholder = create_placeholder_drawing(6*inch, 4*inch)
-                            story.append(placeholder)
-                            story.append(Spacer(1, 12))
-                            story.append(Paragraph(f"Image {i+1}: Error loading image", body_style))
-                            story.append(Spacer(1, 20))
+                            img_flowable = create_placeholder_drawing(6*inch, 3.5*inch)
+                            caption_text = f"Image {i+1}: Error loading image"
+                    
+                    block_elements = [
+                        Spacer(1, 0.35*inch if i == 0 else 0.2*inch),
+                        img_flowable,
+                        Spacer(1, 8),
+                        Paragraph(caption_text, body_style),
+                        Spacer(1, 12),
+                    ]
+                    image_blocks.append(block_elements)
+                
+                for block in image_blocks:
+                    story.append(KeepTogether(block))
             
             # Getting To The City Centre and About the City (Last Page)
             story.append(PageBreak())
+            story.append(Spacer(1, 0.75*inch))
             
             # Location Information - Logo, Title, and Directions Image
             story.append(Paragraph(
