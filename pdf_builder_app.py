@@ -61,43 +61,35 @@ class CoverPageFlowable(Flowable):
         # A4 is 595.28 x 841.89 points
         # So available space is: 475.28 x 721.89 points
         # Convert to inches: 475.28/72 = 6.6 inches, 721.89/72 = 10.0 inches
-        # Increase internal margins so the flowable fits within the document frame
-        margin_total = 2.4*inch
+        # Increase internal margins so the flowable fits within the document frame (matching new top margin)
+        margin_total = 2.6*inch
         self.width = A4[0] - margin_total
         self.height = A4[1] - margin_total
         
     def draw(self):
         """Draw the cover page - note: reportlab uses bottom-left as origin"""
         canvas = self.canv
-        # Use the declared width/height
+        # Use the declared width/height for content
         width = self.width
         height = self.height
         
-        # Logo at top left - adjust Y for bottom-left origin
-        logo_path = get_resource_path("logo.png")
-        logo_bottom = None
-        if os.path.exists(logo_path):
-            try:
-                logo_img = Image.open(logo_path)
-                logo_width = 1.5*inch
-                logo_height = logo_width * (logo_img.height / logo_img.width)
-                logo_y = height - logo_height - 0.2*inch
-                logo_bottom = logo_y
-                canvas.drawImage(logo_path, 0, logo_y, 
-                               width=logo_width, height=logo_height, preserveAspectRatio=True)
-            except Exception as e:
-                print(f"Error loading logo: {e}")
+        # Logo and tagline are drawn in _draw_cover_header callback
+        # Calculate tagline_y position to match _draw_cover_header logic
+        # Logo is positioned HEADER_TOP_OFFSET from top, with tagline 12 points below logo bottom
+        page_height = A4[1]  # A4 page height in points
+        HEADER_TOP_OFFSET = 0.45 * inch  # Match PDFBuilderApp.HEADER_TOP_OFFSET
+        logo_width = 1.4 * inch  # Match standard header
+        # Estimate logo height (assuming roughly square logo, adjust if needed)
+        # In _draw_cover_header, logo_height = logo_width * (img_height / img_width)
+        # Using a reasonable default aspect ratio of 1:1 (square logo)
+        logo_height = logo_width  # Default to square, will be adjusted if logo exists
+        header_top = page_height - HEADER_TOP_OFFSET
+        logo_y = header_top - logo_height
+        TAGLINE_SPACING = 12  # Points between logo bottom and tagline baseline
+        tagline_y = logo_y - TAGLINE_SPACING  # Match _draw_cover_header
         
-        # "Elevating your property experience" tagline below logo - smaller, italic style
-        if logo_bottom is not None:
-            tagline_y = logo_bottom - 0.25*inch
-        else:
-            tagline_y = height - 1.5*inch
-        canvas.setFont("Helvetica-Oblique", 8)  # Smaller, italic font
-        canvas.setFillColor(HexColor('#666666'))  # Gray color for subtlety
-        canvas.drawString(0, tagline_y, "Elevating your property experience")
-        
-        # "Property Report" text below tagline - smaller, regular style
+        # Start content below the header area
+        # "Property Report" text - smaller, regular style
         canvas.setFont("Helvetica", 10)  # Smaller font
         canvas.setFillColor(colors.black)
         report_text_y = tagline_y - 0.25*inch
@@ -263,6 +255,9 @@ class PDFBuilderApp:
         self.property_data = {}
         self.logo_path = get_resource_path("logo.png")
         self.header_logo_image = None
+        
+        # Header positioning constant - consistent across all pages
+        self.HEADER_TOP_OFFSET = 0.45 * inch  # Distance from top of page to top of logo
         if requests is not None:
             self.http_session = requests.Session()
             self.http_session.headers.update({
@@ -1177,8 +1172,47 @@ class PDFBuilderApp:
             self._add_image_path(section_key, image_path, skip_duplicates=True, skip_if_full=True)
     
     def _draw_cover_header(self, canvas, doc):
-        """Cover page handles its own branding."""
-        return
+        """Cover page - draw logo and tagline consistent with standard header."""
+        if not os.path.exists(self.logo_path):
+            return
+        try:
+            logo_reader = ImageReader(self.logo_path)
+            canvas.saveState()
+            img_width, img_height = logo_reader.getSize()
+            if not img_width or not img_height:
+                canvas.restoreState()
+                return
+            logo_width = 1.4 * inch  # Match standard header
+            logo_height = logo_width * (img_height / img_width)
+            page_width, page_height = doc.pagesize
+            # Use consistent top offset - same as standard header
+            # Logo top is positioned HEADER_TOP_OFFSET from the top of the page
+            header_top = page_height - self.HEADER_TOP_OFFSET
+            logo_x = doc.leftMargin  # Match standard header positioning
+            logo_y = header_top - logo_height
+            canvas.drawImage(
+                logo_reader,
+                logo_x,
+                logo_y,
+                width=logo_width,
+                height=logo_height,
+                mask='auto',
+                preserveAspectRatio=True
+            )
+            # Tagline positioned consistently below logo - match standard header
+            TAGLINE_FONT_SIZE = 9
+            TAGLINE_SPACING = 12  # Points between logo bottom and tagline baseline
+            canvas.setFont("Helvetica", TAGLINE_FONT_SIZE)  # Match standard header
+            canvas.setFillColor(HexColor('#334155'))  # Match standard header
+            tagline_y = logo_y - TAGLINE_SPACING
+            canvas.drawString(
+                logo_x,
+                tagline_y,
+                "Elevating Your Property Experience"  # Match standard header text
+            )
+            canvas.restoreState()
+        except Exception as exc:
+            print(f"Error drawing cover page logo: {exc}")
     
     def _draw_standard_header(self, canvas, doc):
         """Draw consistent logo and tagline at the top of every PDF page."""
@@ -1194,7 +1228,9 @@ class PDFBuilderApp:
             logo_width = 1.4 * inch
             logo_height = logo_width * (img_height / img_width)
             page_width, page_height = doc.pagesize
-            header_top = page_height - 0.45 * inch
+            # Use consistent top offset - same across all pages
+            # Logo top is positioned HEADER_TOP_OFFSET from the top of the page
+            header_top = page_height - self.HEADER_TOP_OFFSET
             logo_x = doc.leftMargin
             logo_y = header_top - logo_height
             canvas.drawImage(
@@ -1206,11 +1242,15 @@ class PDFBuilderApp:
                 mask='auto',
                 preserveAspectRatio=True
             )
-            canvas.setFont("Helvetica", 9)
+            # Tagline positioned consistently below logo
+            TAGLINE_FONT_SIZE = 9
+            TAGLINE_SPACING = 12  # Points between logo bottom and tagline baseline
+            canvas.setFont("Helvetica", TAGLINE_FONT_SIZE)
             canvas.setFillColor(HexColor('#334155'))
+            tagline_y = logo_y - TAGLINE_SPACING
             canvas.drawString(
                 logo_x,
-                logo_y - 12,
+                tagline_y,
                 "Elevating Your Property Experience"
             )
             canvas.restoreState()
@@ -1271,13 +1311,30 @@ class PDFBuilderApp:
             
             print(f"Generating PDF: {file_path}")
             
+            # Calculate exact header height for consistent spacing (before creating doc)
+            # Use the same HEADER_TOP_OFFSET constant for consistency
+            # Header positioning:
+            #   - Logo top: HEADER_TOP_OFFSET from page top (0.45")
+            #   - Logo height: varies by aspect ratio, typically ~0.5-0.7"
+            #   - Tagline spacing: 12 points below logo bottom
+            #   - Tagline font: 9pt, with ~2pt margin for text height
+            #   - Content spacing: 0.3" below tagline bottom
+            LOGO_AVERAGE_HEIGHT = 0.6*inch  # Average logo height (will vary slightly)
+            TAGLINE_SPACING_POINTS = 12  # Points between logo bottom and tagline baseline
+            TAGLINE_FONT_SIZE = 9  # Tagline font size in points
+            TAGLINE_TEXT_MARGIN = 2  # Additional points for text height below baseline
+            TAGLINE_TOTAL_HEIGHT = (TAGLINE_SPACING_POINTS + TAGLINE_FONT_SIZE + TAGLINE_TEXT_MARGIN) / 72.0 * inch  # Convert to inches
+            HEADER_TO_CONTENT_SPACING = 0.3*inch  # Space from tagline bottom to first content
+            # Total: top offset + logo + tagline + content spacing
+            REQUIRED_TOP_MARGIN = self.HEADER_TOP_OFFSET + LOGO_AVERAGE_HEIGHT + TAGLINE_TOTAL_HEIGHT + HEADER_TO_CONTENT_SPACING
+            
             # Create PDF document with custom margins
             doc = SimpleDocTemplate(
                 file_path,
                 pagesize=A4,
                 leftMargin=0.75*inch,
                 rightMargin=0.75*inch,
-                topMargin=1.15*inch,
+                topMargin=REQUIRED_TOP_MARGIN,
                 bottomMargin=0.75*inch
             )
             story = []
@@ -1295,6 +1352,15 @@ class PDFBuilderApp:
             dark_grey = HexColor('#374151')    # Dark grey
             success_green = HexColor('#10b981') # Green
             warning_orange = HexColor('#f59e0b') # Orange
+            
+            # Standard spacing constants for consistency
+            # Use the same calculation as topMargin for perfect alignment
+            STANDARD_PAGE_BREAK_SPACING = REQUIRED_TOP_MARGIN  # Exact space after page break (matches topMargin)
+            STANDARD_SECTION_SPACING = 20  # Space after section title (points)
+            STANDARD_IMAGE_SPACING = 20  # Space after images (points)
+            STANDARD_TABLE_SPACING = 20  # Space after tables (points)
+            STANDARD_CONTENT_SPACING = 12  # Space between content elements (points)
+            STANDARD_SUBSECTION_SPACING = 15  # Space after subsection headers (points)
             
             # Get styles
             styles = getSampleStyleSheet()
@@ -1314,8 +1380,8 @@ class PDFBuilderApp:
                 'CustomHeader',
                 parent=styles['Heading2'],
                 fontSize=18,
-                spaceAfter=15,
-                spaceBefore=25,
+                spaceAfter=STANDARD_SUBSECTION_SPACING,
+                spaceBefore=0,
                 textColor=primary_blue,
                 fontName='Helvetica-Bold'
             )
@@ -1324,8 +1390,8 @@ class PDFBuilderApp:
                 'CustomSubHeader',
                 parent=styles['Heading3'],
                 fontSize=14,
-                spaceAfter=10,
-                spaceBefore=15,
+                spaceAfter=STANDARD_CONTENT_SPACING,
+                spaceBefore=0,
                 textColor=dark_grey,
                 fontName='Helvetica-Bold'
             )
@@ -1352,7 +1418,8 @@ class PDFBuilderApp:
                 'SectionTitle',
                 parent=styles['Heading1'],
                 fontSize=24,
-                spaceAfter=18,
+                spaceAfter=0,  # Use explicit Spacer for consistency
+                spaceBefore=0,
                 textColor=colors.black,
                 fontName='Helvetica-Bold',
                 alignment=TA_LEFT
@@ -1363,11 +1430,11 @@ class PDFBuilderApp:
             if cover_page:
                 story.append(cover_page)
                 story.append(PageBreak())
-                story.append(Spacer(1, 0.75*inch))
+                story.append(Spacer(1, STANDARD_PAGE_BREAK_SPACING))
             
             # Investment Opportunity Section - Second Page Design
             story.append(Paragraph("Investment Opportunity", section_title_style))
-            story.append(Spacer(1, 16))
+            story.append(Spacer(1, STANDARD_SECTION_SPACING))
             
             # Calculate investment metrics
             try:
@@ -1459,7 +1526,7 @@ class PDFBuilderApp:
                 ('RIGHTPADDING', (0, 0), (4, -1), 12),
             ]))
             story.append(metrics_table)
-            story.append(Spacer(1, 30))
+            story.append(Spacer(1, STANDARD_TABLE_SPACING))
             
             # Two Column Layout for Costs and Expenses
             # Left Column: Total Purchase Costs
@@ -1562,19 +1629,14 @@ class PDFBuilderApp:
             
             # Page break before Key Information section
             story.append(PageBreak())
-            story.append(Spacer(1, 0.75*inch))
+            story.append(Spacer(1, STANDARD_PAGE_BREAK_SPACING))
             
             # Key Information Section - Third Page Design (all content on one page)
             # Collect all content first, then wrap in KeepTogether
             key_info_content = []
             
-            key_info_content.append(Paragraph(
-                '<para align="left"><b>Key Information</b></para>',
-                ParagraphStyle('KeyInfoTitle', parent=styles['Heading1'], fontSize=24,
-                              textColor=colors.black, alignment=TA_LEFT)
-            ))
-            
-            key_info_content.append(Spacer(1, 15))
+            key_info_content.append(Paragraph("Key Information", section_title_style))
+            key_info_content.append(Spacer(1, STANDARD_SECTION_SPACING))
             
             # Property image (reduced size to fit on page) - always show, use placeholder if missing
             img_width = 6.5*inch
@@ -1605,16 +1667,16 @@ class PDFBuilderApp:
                     else:
                         placeholder = create_placeholder_drawing(img_width, img_height)
                         key_info_content.append(placeholder)
-                    key_info_content.append(Spacer(1, 15))
+                    key_info_content.append(Spacer(1, STANDARD_IMAGE_SPACING))
                 except Exception as e:
                     print(f"Error loading property image: {e}")
                     placeholder = create_placeholder_drawing(img_width, img_height)
                     key_info_content.append(placeholder)
-                    key_info_content.append(Spacer(1, 15))
+                    key_info_content.append(Spacer(1, STANDARD_IMAGE_SPACING))
             else:
                 placeholder = create_placeholder_drawing(img_width, img_height)
                 key_info_content.append(placeholder)
-                key_info_content.append(Spacer(1, 15))
+                key_info_content.append(Spacer(1, STANDARD_IMAGE_SPACING))
             
             # Property Metrics - Four metrics displayed horizontally (label above value)
             asking_price = data.get('asking_price', 'N/A')
@@ -1646,7 +1708,7 @@ class PDFBuilderApp:
                 ('RIGHTPADDING', (0, 0), (-1, -1), 5),
             ]))
             key_info_content.append(metrics_table)
-            key_info_content.append(Spacer(1, 20))
+            key_info_content.append(Spacer(1, STANDARD_TABLE_SPACING))
             
             # Key Features - Bulleted list
             if data.get('key_features'):
@@ -1655,7 +1717,7 @@ class PDFBuilderApp:
                 features_list = [f.strip() for f in features_text.split('\n') if f.strip()]
                 
                 key_info_content.append(Paragraph("Key Features", header_style))
-                key_info_content.append(Spacer(1, 8))
+                key_info_content.append(Spacer(1, STANDARD_CONTENT_SPACING))
                 
                 # Create bulleted list with reduced spacing to fit on page
                 for feature in features_list:
@@ -1667,16 +1729,15 @@ class PDFBuilderApp:
             
             # Use KeepTogether to ensure entire Key Information section stays on same page
             story.append(KeepTogether(key_info_content))
-            story.append(Spacer(1, 20))
             
             # Page break after Key Information page
             story.append(PageBreak())
-            story.append(Spacer(1, 0.75*inch))
+            story.append(Spacer(1, STANDARD_PAGE_BREAK_SPACING))
             
             # Other Key Information Page Header
             other_key_content = []
             other_key_content.append(Paragraph("Other Key Information", section_title_style))
-            other_key_content.append(Spacer(1, 18))
+            other_key_content.append(Spacer(1, STANDARD_SECTION_SPACING))
             
             # Large Property Image below header - always show, use placeholder if missing
             img_width = 7*inch
@@ -1715,7 +1776,7 @@ class PDFBuilderApp:
                 placeholder = create_placeholder_drawing(img_width, img_height)
                 other_key_content.append(placeholder)
             
-            other_key_content.append(Spacer(1, 18))
+            other_key_content.append(Spacer(1, STANDARD_IMAGE_SPACING))
             
             # EPC Section - Horizontal Layout: Title (left) | Chart (middle) | Details (right)
             epc_title_para = Paragraph("Energy Performance Certificate", 
@@ -1747,14 +1808,14 @@ class PDFBuilderApp:
                 ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
             ]))
             other_key_content.append(epc_table)
-            other_key_content.append(Spacer(1, 10))
+            other_key_content.append(Spacer(1, STANDARD_CONTENT_SPACING))
             
             disclaimer_para = Paragraph(
                 "This EPC data is accurate up to 6 months ago. If a more recent EPC assessment was done within this period, it will not be displayed here.",
                 ParagraphStyle('EPCDisclaimer', parent=styles['Normal'], 
                               fontSize=9, textColor=HexColor('#666666')))
             other_key_content.append(disclaimer_para)
-            other_key_content.append(Spacer(1, 16))
+            other_key_content.append(Spacer(1, STANDARD_CONTENT_SPACING))
             
             if data.get('broadband_available'):
                 broadband_title_para = Paragraph("Internet / Broadband Availability", 
@@ -1799,20 +1860,16 @@ class PDFBuilderApp:
             
             if floor_plan_queue:
                 story.append(PageBreak())
-                story.append(Spacer(1, 0.75*inch))
+                story.append(Spacer(1, STANDARD_PAGE_BREAK_SPACING))
                 
-                story.append(Paragraph(
-                    '<para align="left"><b>Floor Plans</b></para>',
-                    ParagraphStyle('FloorPlansTitleText', parent=styles['Heading1'], fontSize=24,
-                                   textColor=colors.black, alignment=TA_LEFT)
-                ))
-                story.append(Spacer(1, 12))
+                story.append(Paragraph("Floor Plans", section_title_style))
+                story.append(Spacer(1, STANDARD_SECTION_SPACING))
                 
                 for i, image_path in enumerate(floor_plan_queue):
                     # For subsequent floor plans, add page break (but not for the first one, since we already added it)
                     if i > 0:
                         story.append(PageBreak())
-                        story.append(Spacer(1, 0.85*inch))
+                        story.append(Spacer(1, STANDARD_PAGE_BREAK_SPACING))
                     
                     if image_path is None:
                         # Use placeholder
@@ -1901,9 +1958,9 @@ class PDFBuilderApp:
             
             if regular_images:
                 story.append(PageBreak())
-                story.append(Spacer(1, 0.75*inch))
-                story.append(Paragraph("Property Images", header_style))
-                story.append(Spacer(1, 0.35*inch))
+                story.append(Spacer(1, STANDARD_PAGE_BREAK_SPACING))
+                story.append(Paragraph("Property Images", section_title_style))
+                story.append(Spacer(1, STANDARD_SECTION_SPACING))
                 
                 image_blocks = []
                 for i, image_path in enumerate(regular_images):
@@ -1925,11 +1982,11 @@ class PDFBuilderApp:
                             caption_text = f"Image {i+1}: Error loading image"
                     
                     block_elements = [
-                        Spacer(1, 0.35*inch if i == 0 else 0.2*inch),
+                        Spacer(1, STANDARD_IMAGE_SPACING if i == 0 else STANDARD_CONTENT_SPACING),
                         img_flowable,
-                        Spacer(1, 8),
+                        Spacer(1, STANDARD_CONTENT_SPACING),
                         Paragraph(caption_text, body_style),
-                        Spacer(1, 12),
+                        Spacer(1, STANDARD_CONTENT_SPACING),
                     ]
                     image_blocks.append(block_elements)
                 
@@ -1938,16 +1995,11 @@ class PDFBuilderApp:
             
             # Getting To The City Centre and About the City (Last Page)
             story.append(PageBreak())
-            story.append(Spacer(1, 0.75*inch))
+            story.append(Spacer(1, STANDARD_PAGE_BREAK_SPACING))
             
             # Location Information - Logo, Title, and Directions Image
-            story.append(Paragraph(
-                '<para align="left"><b>Getting To The City Centre</b></para>',
-                ParagraphStyle('CityCentreTitle', parent=styles['Heading1'], fontSize=24,
-                              textColor=colors.black, alignment=TA_LEFT)
-            ))
-            
-            story.append(Spacer(1, 20))
+            story.append(Paragraph("Getting To The City Centre", section_title_style))
+            story.append(Spacer(1, STANDARD_SECTION_SPACING))
             
             # Directions Image
             directions_image_path = next(iter(directions_images), None)
@@ -1990,10 +2042,10 @@ class PDFBuilderApp:
                     story.append(placeholder)
             else:
                 # Use placeholder if not found
-                placeholder = create_placeholder_drawing(7*inch, 4.5*inch)
-                story.append(placeholder)
+                    placeholder = create_placeholder_drawing(7*inch, 4.5*inch)
+                    story.append(placeholder)
             
-            story.append(Spacer(1, 15))
+            story.append(Spacer(1, STANDARD_IMAGE_SPACING))
             
             # About the City and City Images - keep together on same page
             about_city_content = []
@@ -2004,7 +2056,7 @@ class PDFBuilderApp:
                 about_city_content.append(Paragraph(f"<b>{data.get('city', 'N/A')}</b>", highlight_style))
                 about_city_content.append(Paragraph(data.get('about_city'), body_style))
                 about_city_content.append(Paragraph(f"<b>Population:</b> {data.get('population', 'N/A')}", body_style))
-                about_city_content.append(Spacer(1, 10))
+                about_city_content.append(Spacer(1, STANDARD_CONTENT_SPACING))
             
             # City Images Section
             city_queue = list(city_images)
@@ -2061,7 +2113,7 @@ class PDFBuilderApp:
                 ]))
                 about_city_content.append(city_table)
             
-            about_city_content.append(Spacer(1, 15))
+            about_city_content.append(Spacer(1, STANDARD_IMAGE_SPACING))
             
             # Wrap in KeepTogether to ensure they stay on same page
             story.append(KeepTogether(about_city_content))
