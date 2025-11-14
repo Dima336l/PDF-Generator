@@ -50,21 +50,50 @@ def create_placeholder_drawing(width, height):
 
 class CoverPageFlowable(Flowable):
     """Custom flowable for cover page with absolute positioning"""
-    def __init__(self, data, images_by_section, accent_gold, primary_blue):
+    def __init__(self, data, images_by_section, accent_gold, primary_blue, logo_path=None):
         Flowable.__init__(self)
         self.data = data
         self.images_by_section = images_by_section
         self.accent_gold = accent_gold
         self.primary_blue = primary_blue
-        # Account for margins - use exact frame size from reportlab
-        # Error showed frame size: 475.28 x 721.89 points
-        # A4 is 595.28 x 841.89 points
-        # So available space is: 475.28 x 721.89 points
-        # Convert to inches: 475.28/72 = 6.6 inches, 721.89/72 = 10.0 inches
-        # Increase internal margins so the flowable fits within the document frame (matching new top margin)
-        margin_total = 2.6*inch
-        self.width = A4[0] - margin_total
-        self.height = A4[1] - margin_total
+        self.logo_path = logo_path
+        
+        # Calculate margins to match document margins exactly
+        # Use same calculation as in generate_pdf for consistency
+        left_margin = 0.75*inch
+        right_margin = 0.75*inch
+        bottom_margin = 0.75*inch
+        HEADER_TOP_OFFSET = 0.45 * inch
+        
+        # Calculate header height using same logic as generate_pdf
+        TAGLINE_SPACING_POINTS = 12
+        TAGLINE_FONT_SIZE = 9
+        TAGLINE_TEXT_MARGIN = 2
+        TAGLINE_TOTAL_HEIGHT = (TAGLINE_SPACING_POINTS + TAGLINE_FONT_SIZE + TAGLINE_TEXT_MARGIN) / 72.0 * inch
+        
+        # Get actual logo height (same calculation as generate_pdf)
+        logo_width = 1.4 * inch
+        LOGO_ACTUAL_HEIGHT = 0.6*inch  # Default fallback
+        if self.logo_path and os.path.exists(self.logo_path):
+            try:
+                from reportlab.lib.utils import ImageReader
+                logo_reader = ImageReader(self.logo_path)
+                img_width, img_height = logo_reader.getSize()
+                if img_width and img_height:
+                    LOGO_ACTUAL_HEIGHT = logo_width * (img_height / img_width)
+            except Exception:
+                pass
+        
+        HEADER_TO_CONTENT_SPACING = 0  # No spacing - content starts immediately
+        top_margin = HEADER_TOP_OFFSET + LOGO_ACTUAL_HEIGHT + TAGLINE_TOTAL_HEIGHT + HEADER_TO_CONTENT_SPACING
+        
+        # Flowable dimensions match the actual frame size
+        # Subtract a safety margin to ensure it fits within the frame
+        # (reportlab frames may have slight internal padding or rounding differences)
+        # 12 points = 0.167 inches, use slightly more for safety
+        safety_margin = 0.2 * inch  # Safety margin to ensure fit (covers ~14.4 points)
+        self.width = A4[0] - left_margin - right_margin - safety_margin
+        self.height = A4[1] - top_margin - bottom_margin - safety_margin
         
     def draw(self):
         """Draw the cover page - note: reportlab uses bottom-left as origin"""
@@ -74,28 +103,17 @@ class CoverPageFlowable(Flowable):
         height = self.height
         
         # Logo and tagline are drawn in _draw_cover_header callback
-        # Calculate tagline_y position to match _draw_cover_header logic
-        # Logo is positioned HEADER_TOP_OFFSET from top, with tagline 12 points below logo bottom
+        # Calculate exact tagline bottom position to align address immediately after it
+        # The flowable starts at topMargin from page top, which equals the header height
+        # So content should start at the very top of the flowable (y = height)
         page_height = A4[1]  # A4 page height in points
         HEADER_TOP_OFFSET = 0.45 * inch  # Match PDFBuilderApp.HEADER_TOP_OFFSET
-        logo_width = 1.4 * inch  # Match standard header
-        # Estimate logo height (assuming roughly square logo, adjust if needed)
-        # In _draw_cover_header, logo_height = logo_width * (img_height / img_width)
-        # Using a reasonable default aspect ratio of 1:1 (square logo)
-        logo_height = logo_width  # Default to square, will be adjusted if logo exists
-        header_top = page_height - HEADER_TOP_OFFSET
-        logo_y = header_top - logo_height
         TAGLINE_SPACING = 12  # Points between logo bottom and tagline baseline
-        tagline_y = logo_y - TAGLINE_SPACING  # Match _draw_cover_header
-        
-        # Start content below the header area
-        # "Property Report" text - smaller, regular style
-        canvas.setFont("Helvetica", 10)  # Smaller font
-        canvas.setFillColor(colors.black)
-        report_text_y = tagline_y - 0.25*inch
-        canvas.drawString(0, report_text_y, "Property Report")
+        TAGLINE_FONT_SIZE = 9  # Tagline font size in points
+        TAGLINE_TEXT_MARGIN = 2  # Additional points for text height below baseline
         
         # Property Address (large, bold) - handle text wrapping
+        # Position address at top of flowable - no spacing after tagline
         address = f"{self.data.get('address', '')}, {self.data.get('postal_code', '')}"
         canvas.setFont("Helvetica-Bold", 24)
         canvas.setFillColor(colors.black)
@@ -114,8 +132,13 @@ class CoverPageFlowable(Flowable):
         if current_line:
             address_lines.append(current_line)
         
-        # Move the address block up even more (starting from "5, Ridley Road")
-        address_y = height - 2.0*inch  # Moved up from 2.5 to 2.0
+        # Position address to match "Investment Opportunity" positioning
+        # Paragraph elements position the first line's baseline accounting for font metrics.
+        # For 24pt Helvetica-Bold, reportlab typically positions baseline ~12-14 points below top.
+        # This accounts for the font's natural positioning in a text flow.
+        font_size = 24  # Match section_title_style fontSize
+        paragraph_baseline_offset = 14 / 72.0 * inch  # ~14 points offset to match Paragraph positioning
+        address_y = height - paragraph_baseline_offset  # Position to match Paragraph baseline
         for i, line in enumerate(address_lines):
             canvas.drawString(0, address_y - (i * 0.35*inch), line)
         
@@ -1315,18 +1338,31 @@ class PDFBuilderApp:
             # Use the same HEADER_TOP_OFFSET constant for consistency
             # Header positioning:
             #   - Logo top: HEADER_TOP_OFFSET from page top (0.45")
-            #   - Logo height: varies by aspect ratio, typically ~0.5-0.7"
+            #   - Logo height: get actual height from logo image for accuracy
             #   - Tagline spacing: 12 points below logo bottom
             #   - Tagline font: 9pt, with ~2pt margin for text height
-            #   - Content spacing: 0.3" below tagline bottom
-            LOGO_AVERAGE_HEIGHT = 0.6*inch  # Average logo height (will vary slightly)
+            #   - Content spacing: 0 below tagline bottom (content starts immediately)
             TAGLINE_SPACING_POINTS = 12  # Points between logo bottom and tagline baseline
             TAGLINE_FONT_SIZE = 9  # Tagline font size in points
             TAGLINE_TEXT_MARGIN = 2  # Additional points for text height below baseline
             TAGLINE_TOTAL_HEIGHT = (TAGLINE_SPACING_POINTS + TAGLINE_FONT_SIZE + TAGLINE_TEXT_MARGIN) / 72.0 * inch  # Convert to inches
-            HEADER_TO_CONTENT_SPACING = 0.3*inch  # Space from tagline bottom to first content
-            # Total: top offset + logo + tagline + content spacing
-            REQUIRED_TOP_MARGIN = self.HEADER_TOP_OFFSET + LOGO_AVERAGE_HEIGHT + TAGLINE_TOTAL_HEIGHT + HEADER_TO_CONTENT_SPACING
+            HEADER_TO_CONTENT_SPACING = 0  # No space from tagline bottom to first content - content starts immediately
+            
+            # Get actual logo height for accurate top margin calculation
+            logo_width = 1.4 * inch  # Standard logo width
+            LOGO_ACTUAL_HEIGHT = 0.6*inch  # Default fallback
+            if os.path.exists(self.logo_path):
+                try:
+                    from reportlab.lib.utils import ImageReader
+                    logo_reader = ImageReader(self.logo_path)
+                    img_width, img_height = logo_reader.getSize()
+                    if img_width and img_height:
+                        LOGO_ACTUAL_HEIGHT = logo_width * (img_height / img_width)
+                except Exception:
+                    pass  # Use default if can't read logo
+            
+            # Total: top offset + actual logo height + tagline (no content spacing)
+            REQUIRED_TOP_MARGIN = self.HEADER_TOP_OFFSET + LOGO_ACTUAL_HEIGHT + TAGLINE_TOTAL_HEIGHT + HEADER_TO_CONTENT_SPACING
             
             # Create PDF document with custom margins
             doc = SimpleDocTemplate(
@@ -1354,8 +1390,8 @@ class PDFBuilderApp:
             warning_orange = HexColor('#f59e0b') # Orange
             
             # Standard spacing constants for consistency
-            # Use the same calculation as topMargin for perfect alignment
-            STANDARD_PAGE_BREAK_SPACING = REQUIRED_TOP_MARGIN  # Exact space after page break (matches topMargin)
+            # No spacing needed after page breaks - top margin already accounts for header
+            STANDARD_PAGE_BREAK_SPACING = 0  # No extra space - top margin handles header positioning
             STANDARD_SECTION_SPACING = 20  # Space after section title (points)
             STANDARD_IMAGE_SPACING = 20  # Space after images (points)
             STANDARD_TABLE_SPACING = 20  # Space after tables (points)
@@ -1430,7 +1466,7 @@ class PDFBuilderApp:
             if cover_page:
                 story.append(cover_page)
                 story.append(PageBreak())
-                story.append(Spacer(1, STANDARD_PAGE_BREAK_SPACING))
+                # No spacer needed - top margin already accounts for header
             
             # Investment Opportunity Section - Second Page Design
             story.append(Paragraph("Investment Opportunity", section_title_style))
@@ -1629,7 +1665,7 @@ class PDFBuilderApp:
             
             # Page break before Key Information section
             story.append(PageBreak())
-            story.append(Spacer(1, STANDARD_PAGE_BREAK_SPACING))
+            # No spacer needed - top margin already accounts for header
             
             # Key Information Section - Third Page Design (all content on one page)
             # Collect all content first, then wrap in KeepTogether
@@ -1732,7 +1768,7 @@ class PDFBuilderApp:
             
             # Page break after Key Information page
             story.append(PageBreak())
-            story.append(Spacer(1, STANDARD_PAGE_BREAK_SPACING))
+            # No spacer needed - top margin already accounts for header
             
             # Other Key Information Page Header
             other_key_content = []
@@ -1860,7 +1896,7 @@ class PDFBuilderApp:
             
             if floor_plan_queue:
                 story.append(PageBreak())
-                story.append(Spacer(1, STANDARD_PAGE_BREAK_SPACING))
+                # No spacer needed - top margin already accounts for header
                 
                 story.append(Paragraph("Floor Plans", section_title_style))
                 story.append(Spacer(1, STANDARD_SECTION_SPACING))
@@ -1869,7 +1905,7 @@ class PDFBuilderApp:
                     # For subsequent floor plans, add page break (but not for the first one, since we already added it)
                     if i > 0:
                         story.append(PageBreak())
-                        story.append(Spacer(1, STANDARD_PAGE_BREAK_SPACING))
+                        # No spacer needed - top margin already accounts for header
                     
                     if image_path is None:
                         # Use placeholder
@@ -1958,7 +1994,7 @@ class PDFBuilderApp:
             
             if regular_images:
                 story.append(PageBreak())
-                story.append(Spacer(1, STANDARD_PAGE_BREAK_SPACING))
+                # No spacer needed - top margin already accounts for header
                 story.append(Paragraph("Property Images", section_title_style))
                 story.append(Spacer(1, STANDARD_SECTION_SPACING))
                 
@@ -1995,7 +2031,7 @@ class PDFBuilderApp:
             
             # Getting To The City Centre and About the City (Last Page)
             story.append(PageBreak())
-            story.append(Spacer(1, STANDARD_PAGE_BREAK_SPACING))
+            # No spacer needed - top margin already accounts for header
             
             # Location Information - Logo, Title, and Directions Image
             story.append(Paragraph("Getting To The City Centre", section_title_style))
@@ -2133,7 +2169,7 @@ class PDFBuilderApp:
         """Create the cover page with logo, property address, main image, thumbnails, and footer"""
         # Always create cover page, even if no images (will use placeholders)
         images_by_section = {key: list(paths) for key, paths in self.image_sections.items()}
-        return CoverPageFlowable(data, images_by_section, accent_gold, primary_blue)
+        return CoverPageFlowable(data, images_by_section, accent_gold, primary_blue, logo_path=self.logo_path)
             
     def create_header(self, data, accent_gold, primary_blue):
         """Create a professional header with branding"""
