@@ -1913,20 +1913,16 @@ class PDFBuilderApp:
                         img_height = 4.5*inch
                         placeholder = create_placeholder_drawing(img_width, img_height)
                         
-                        # Center vertically
-                        available_height = 10*inch
-                        remaining_height = available_height - img_height
-                        top_spacer = remaining_height / 2
-                        if top_spacer > 0:
-                            story.append(Spacer(1, top_spacer))
+                        # Align to top-left like other images (no vertical centering)
+                        # No spacer needed - image starts immediately after section spacing
                         
-                        # Center horizontally
-                        center_table = Table([[placeholder]], colWidths=[7.5*inch])
-                        center_table.setStyle(TableStyle([
-                            ('ALIGN', (0, 0), (0, 0), 'CENTER'),
-                            ('VALIGN', (0, 0), (0, 0), 'MIDDLE'),
+                        # Align to left (not centered)
+                        left_table = Table([[placeholder]], colWidths=[img_width])
+                        left_table.setStyle(TableStyle([
+                            ('ALIGN', (0, 0), (0, 0), 'LEFT'),
+                            ('VALIGN', (0, 0), (0, 0), 'TOP'),
                         ]))
-                        story.append(center_table)
+                        story.append(left_table)
                     else:
                         try:
                             # Load image to get dimensions
@@ -1950,22 +1946,16 @@ class PDFBuilderApp:
                                 img_height = 4.5*inch
                                 img = create_placeholder_drawing(img_width, img_height)
                             
-                            # Center the image on the page
-                            available_height = 10*inch
-                            remaining_height = available_height - img_height
-                            top_spacer = remaining_height / 2
+                            # Align image to top-left like other images (no centering)
+                            # No spacer needed - image starts immediately after section spacing
                             
-                            # Add spacer to center vertically (before image)
-                            if top_spacer > 0:
-                                story.append(Spacer(1, top_spacer))
-                            
-                            # Center horizontally using Table
-                            center_table = Table([[img]], colWidths=[7.5*inch])
-                            center_table.setStyle(TableStyle([
-                                ('ALIGN', (0, 0), (0, 0), 'CENTER'),
-                                ('VALIGN', (0, 0), (0, 0), 'MIDDLE'),
+                            # Align to left (not centered) using Table
+                            left_table = Table([[img]], colWidths=[img_width])
+                            left_table.setStyle(TableStyle([
+                                ('ALIGN', (0, 0), (0, 0), 'LEFT'),
+                                ('VALIGN', (0, 0), (0, 0), 'TOP'),
                             ]))
-                            story.append(center_table)
+                            story.append(left_table)
                             
                         except Exception as e:
                             print(f"Error adding floor plan image {image_path}: {e}")
@@ -1973,17 +1963,13 @@ class PDFBuilderApp:
                             img_width = 6.5*inch
                             img_height = 4.5*inch
                             placeholder = create_placeholder_drawing(img_width, img_height)
-                            available_height = 10*inch
-                            remaining_height = available_height - img_height
-                            top_spacer = remaining_height / 2
-                            if top_spacer > 0:
-                                story.append(Spacer(1, top_spacer))
-                            center_table = Table([[placeholder]], colWidths=[7.5*inch])
-                            center_table.setStyle(TableStyle([
-                                ('ALIGN', (0, 0), (0, 0), 'CENTER'),
-                                ('VALIGN', (0, 0), (0, 0), 'MIDDLE'),
+                            # Align to top-left like other images (no centering)
+                            left_table = Table([[placeholder]], colWidths=[img_width])
+                            left_table.setStyle(TableStyle([
+                                ('ALIGN', (0, 0), (0, 0), 'LEFT'),
+                                ('VALIGN', (0, 0), (0, 0), 'TOP'),
                             ]))
-                            story.append(center_table)
+                            story.append(left_table)
             
             # Property Images Gallery - defaults to cover images if gallery is empty
             regular_images = list(property_gallery_images)
