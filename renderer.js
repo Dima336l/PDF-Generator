@@ -374,10 +374,16 @@ async function generatePDFFile() {
                 imagesPayload[section] = b64s;
             }
 
+            // Include logo
+            let logoBase64 = null;
+            try {
+                logoBase64 = await urlToDataURL('logo.png');
+            } catch (_e) {}
+
             const resp = await fetch(`${BACKEND_URL}/generate`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ data, images: imagesPayload })
+                body: JSON.stringify({ data, images: imagesPayload, logo_base64: logoBase64 })
             });
             if (!resp.ok) {
                 const txt = await resp.text();
