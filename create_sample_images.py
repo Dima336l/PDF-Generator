@@ -17,7 +17,7 @@ def create_sample_images():
             'color': (34, 139, 34)  # Forest green
         },
         {
-            'filename': 'living_room.jpg', 
+            'filename': 'living_room.png', 
             'title': 'Living Room',
             'description': 'Spacious and modern living area',
             'color': (255, 140, 0)  # Dark orange
