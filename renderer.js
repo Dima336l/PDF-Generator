@@ -18,6 +18,9 @@ let generatePDF = null;
     }
 })();
 
+// Backend URL for web builds
+const BACKEND_URL = 'https://pdf-generator-backend-fbtb.onrender.com';
+
 // Image storage
 const imageSections = {
     cover: [],
@@ -338,83 +341,52 @@ document.addEventListener('DOMContentLoaded', () => {
 // Generate PDF
 async function generatePDFFile() {
     try {
-        // Browser: generate a simplified PDF and trigger download
+        // Browser: call backend and download PDF
         if (!ipcRenderer) {
             const data = getFormData();
-            const { jsPDF } = window.jspdf || {};
-            if (!jsPDF) {
-                alert('PDF library not loaded. Please refresh and try again.');
-                return;
+
+            const fileToDataURL = (file) =>
+                new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(file);
+                });
+
+            const imagesPayload = {};
+            const sections = Object.keys(imageSections);
+            for (const section of sections) {
+                const items = imageSections[section] || [];
+                const b64s = [];
+                for (const item of items) {
+                    if (item && item.file) {
+                        // Browser object with File
+                        // eslint-disable-next-line no-await-in-loop
+                        const b64 = await fileToDataURL(item.file);
+                        b64s.push(b64);
+                    }
+                }
+                imagesPayload[section] = b64s;
             }
-            const doc = new jsPDF({ unit: 'pt', format: 'a4' });
-            const margin = 54; // 0.75 inch
-            let y = margin;
 
-            doc.setFont('helvetica', 'bold');
-            doc.setFontSize(20);
-            doc.text('Property Investment Report', margin, y);
-            y += 28;
-
-            doc.setFont('helvetica', 'normal');
-            doc.setFontSize(12);
-            doc.text(`Address: ${data.address || ''}`, margin, y); y += 18;
-            doc.text(`Postal Code: ${data.postal_code || ''}`, margin, y); y += 18;
-            doc.text(`Property Type: ${data.property_type || ''}`, margin, y); y += 18;
-            doc.text(`Bedrooms: ${data.bedrooms || ''}`, margin, y); y += 18;
-            doc.text(`Bathrooms: ${data.bathrooms || ''}`, margin, y); y += 24;
-
-            doc.setFont('helvetica', 'bold');
-            doc.setFontSize(16);
-            doc.text('Investment', margin, y); y += 20;
-
-            doc.setFont('helvetica', 'normal');
-            doc.setFontSize(12);
-            const investLines = [
-                `Purchase Price: ${data.purchase_price || ''}`,
-                `Deposit (%): ${data.deposit_percent || ''}`,
-                `Mortgage Rate (%): ${data.mortgage_rate || ''}`,
-                `Monthly Rent: ${data.monthly_rent || ''}`,
-                `Stamp Duty: ${data.stamp_duty || ''}`,
-                `Survey Cost: ${data.survey_cost || ''}`,
-                `Legal Fees: ${data.legal_fees || ''}`,
-                `Loan Setup: ${data.loan_setup || ''}`
-            ];
-            investLines.forEach(line => { doc.text(line, margin, y); y += 16; });
-            y += 10;
-
-            doc.setFont('helvetica', 'bold');
-            doc.setFontSize(16);
-            doc.text('EPC', margin, y); y += 20;
-            doc.setFont('helvetica', 'normal');
-            doc.setFontSize(12);
-            const epcLines = [
-                `Rating: ${data.epc_rating || ''}`,
-                `Current Energy Cost: ${data.current_energy_cost || ''}`,
-                `Potential Energy Cost: ${data.potential_energy_cost || ''}`,
-                `CO2 (Current): ${data.co2_current || ''}`,
-                `CO2 (Potential): ${data.co2_potential || ''}`
-            ];
-            epcLines.forEach(line => { doc.text(line, margin, y); y += 16; });
-            y += 10;
-
-            doc.setFont('helvetica', 'bold');
-            doc.setFontSize(16);
-            doc.text('Location', margin, y); y += 20;
-            doc.setFont('helvetica', 'normal');
-            doc.setFontSize(12);
-            const locLines = [
-                `City: ${data.city || ''}`,
-                `City Centre Distance (miles): ${data.city_centre_distance || ''}`,
-                `Nearest Station: ${data.nearest_station || ''}`,
-                `Station Distance (miles): ${data.station_distance || ''}`,
-                `Nearest School: ${data.nearest_school || ''}`,
-                `School Distance (miles): ${data.school_distance || ''}`
-            ];
-            locLines.forEach(line => { doc.text(line, margin, y); y += 16; });
-
-            // Save
-            const filename = `${(data.address || 'Property Report').replace(/[^a-z0-9 \-_]/gi, '')}.pdf`;
-            doc.save(filename);
+            const resp = await fetch(`${BACKEND_URL}/generate`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ data, images: imagesPayload })
+            });
+            if (!resp.ok) {
+                const txt = await resp.text();
+                throw new Error(`Backend error: ${resp.status} ${txt}`);
+            }
+            const blob = await resp.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${(data.address || 'Property Report').replace(/[^a-z0-9 \-_]/gi, '')}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
             return;
         }
         // Test IPC connection first
