@@ -1,7 +1,16 @@
-const { ipcRenderer } = require('electron');
-const path = require('path');
-const fs = require('fs');
-const { generatePDF } = require('./pdf-generator');
+// Detect environment: Electron vs Browser
+let ipcRenderer = null;
+let path = null;
+let fs = null;
+let generatePDF = null;
+try {
+    ipcRenderer = require('electron').ipcRenderer;
+    path = require('path');
+    fs = require('fs');
+    generatePDF = require('./pdf-generator').generatePDF;
+} catch (e) {
+    // Running on the web (no Electron/Node require)
+}
 
 // Image storage
 const imageSections = {
@@ -31,6 +40,27 @@ document.querySelectorAll('.tab-button').forEach(button => {
 
 // Image management functions
 async function addImages(section) {
+    // Browser mode: use <input type="file">
+    if (!ipcRenderer) {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.multiple = true;
+        input.onchange = () => {
+            const files = Array.from(input.files || []);
+            const items = files.map(file => ({
+                url: URL.createObjectURL(file),
+                name: file.name,
+                file
+            }));
+            imageSections[section].push(...items);
+            updateImageList(section);
+        };
+        input.click();
+        return;
+    }
+
+    // Electron mode
     try {
         const filePaths = await ipcRenderer.invoke('select-images');
         if (filePaths && filePaths.length > 0) {
@@ -47,30 +77,28 @@ function updateImageList(section) {
     if (!list) return;
     
     list.innerHTML = '';
-    imageSections[section].forEach((imagePath, index) => {
+    imageSections[section].forEach((imageItem, index) => {
         const li = document.createElement('li');
         li.dataset.index = index;
         li.dataset.section = section;
         
-        const fileName = path.basename(imagePath);
+        // Determine display name and URL (supports Electron paths or browser object URLs)
+        let fileName = '';
+        let fileUrl = '';
+        if (typeof imageItem === 'string') {
+            fileName = path ? path.basename(imageItem) : imageItem.split('/').pop();
+            let normalizedPath = imageItem.replace(/\\/g, '/');
+            if (normalizedPath.match(/^[A-Za-z]:/)) normalizedPath = '/' + normalizedPath;
+            fileUrl = `file://${normalizedPath}`;
+        } else {
+            fileName = imageItem.name || 'image';
+            fileUrl = imageItem.url;
+        }
         const isSelected = selectedImages[section] === index;
         
         if (isSelected) {
             li.classList.add('selected');
         }
-        
-        // Normalize file path for file:// URL (Windows uses backslashes)
-        // Convert backslashes to forward slashes
-        let normalizedPath = imagePath.replace(/\\/g, '/');
-        
-        // Handle Windows absolute paths (C:/path -> /C:/path for file://)
-        // macOS/Linux paths already start with /
-        if (normalizedPath.match(/^[A-Za-z]:/)) {
-            // Windows absolute path (e.g., C:/Users/...)
-            normalizedPath = '/' + normalizedPath;
-        }
-        
-        const fileUrl = `file://${normalizedPath}`;
         
         li.innerHTML = `
             <img src="${fileUrl}" alt="${fileName}" onerror="this.style.display='none'">
@@ -238,8 +266,10 @@ function loadMockData() {
 
 // Load default images from sample_images folder
 async function loadDefaultImages() {
-    const fs = require('fs');
-    const path = require('path');
+    if (!ipcRenderer) {
+        // Skip in browser – users add images with the file picker
+        return;
+    }
     
     try {
         // Get the app directory from main process
@@ -302,6 +332,11 @@ document.addEventListener('DOMContentLoaded', () => {
 // Generate PDF
 async function generatePDFFile() {
     try {
+        // Browser: show message (web build saves via download – not implemented yet)
+        if (!ipcRenderer) {
+            alert('The web version will download the PDF directly. This feature needs enabling for the browser build.');
+            return;
+        }
         // Test IPC connection first
         try {
             await ipcRenderer.invoke('test-ipc');
