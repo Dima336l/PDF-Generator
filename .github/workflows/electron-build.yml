@@ -32,15 +32,18 @@ jobs:
           npx electron-builder --publish=never $TARGETS
         env:
           # Build targets per OS (override via env var for clarity)
-          TARGETS: ${{ matrix.os == 'windows-latest' && '--win' || '--mac --x64 --arm64' }}
+          # Windows: build NSIS installer. macOS: build ARM64 only with ZIP (smaller)
+          TARGETS: ${{ matrix.os == 'windows-latest' && '--win' || '--mac=zip --arm64' }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: electron-dist-${{ matrix.os }}
           path: |
-            dist/**
-            dist-electron/**
+            dist/*.exe
+            dist/*.msi
+            dist/*.zip
+            dist/*.dmg
           if-no-files-found: warn
 
 
