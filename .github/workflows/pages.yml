@@ -1,0 +1,50 @@
+name: Deploy Website to GitHub Pages
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare site content
+        run: |
+          mkdir -p public
+          cp index.html public/
+          cp styles.css public/ || true
+          cp renderer.js public/
+          cp pdf-generator.js public/
+          cp logo.png public/ || true
+          # Optional example images
+          if [ -d sample_images ]; then
+            mkdir -p public/sample_images
+            cp -r sample_images/* public/sample_images/
+          fi
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+
