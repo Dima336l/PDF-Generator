@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Property Investment Report Builder</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <img id="logo" src="logo.png" alt="Logo" class="logo" onerror="this.style.display='none'">
+                <h1>Property Investment Report Builder</h1>
+            </div>
+        </header>
+
+        <!-- Tabs -->
+        <div class="tabs-container">
+            <div class="tabs">
+                <button class="tab-button active" data-tab="property">Property Info</button>
+                <button class="tab-button" data-tab="investment">Investment</button>
+                <button class="tab-button" data-tab="epc">EPC</button>
+                <button class="tab-button" data-tab="location">Location</button>
+                <button class="tab-button" data-tab="images">Images</button>
+            </div>
+        </div>
+
+        <!-- Tab Content -->
+        <div class="content-container">
+            <!-- Property Info Tab -->
+            <div id="property-tab" class="tab-content active">
+                <div class="section">
+                    <h2>Property Information</h2>
+                    <div class="form-grid">
+                        <label>Property Address:</label>
+                        <input type="text" id="address" placeholder="Enter property address">
+
+                        <label>Postal Code:</label>
+                        <input type="text" id="postal_code" placeholder="e.g., L6 6DN">
+
+                        <label>Property Type:</label>
+                        <input type="text" id="property_type" placeholder="e.g., Terraced House">
+
+                        <label>Bedrooms:</label>
+                        <input type="text" id="bedrooms" placeholder="e.g., 3">
+
+                        <label>Bathrooms:</label>
+                        <input type="text" id="bathrooms" placeholder="e.g., 1">
+
+                        <label>Size (sqm):</label>
+                        <input type="text" id="size_sqm" placeholder="e.g., 85">
+
+                        <label>Asking Price:</label>
+                        <input type="text" id="asking_price" placeholder="e.g., £150,000">
+
+                        <label>On Market For (days):</label>
+                        <input type="text" id="days_on_market" placeholder="e.g., 45">
+
+                        <label>Key Features:</label>
+                        <textarea id="key_features" rows="3" placeholder="Enter key features (one per line)"></textarea>
+
+                        <label>Description:</label>
+                        <textarea id="description" rows="5" placeholder="Enter property description"></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Investment Tab -->
+            <div id="investment-tab" class="tab-content">
+                <div class="section">
+                    <h2>Purchase Information</h2>
+                    <div class="form-grid">
+                        <label>Purchase Price:</label>
+                        <input type="text" id="purchase_price" placeholder="e.g., £150,000">
+
+                        <label>Deposit (%):</label>
+                        <input type="text" id="deposit_percent" placeholder="e.g., 20">
+
+                        <label>Mortgage Rate (%):</label>
+                        <input type="text" id="mortgage_rate" placeholder="e.g., 5.5">
+
+                        <label>Stamp Duty:</label>
+                        <input type="text" id="stamp_duty" placeholder="e.g., £5,000">
+
+                        <label>Survey Cost:</label>
+                        <input type="text" id="survey_cost" placeholder="e.g., £500">
+
+                        <label>Legal Fees:</label>
+                        <input type="text" id="legal_fees" placeholder="e.g., £1,500">
+
+                        <label>Loan Set-up:</label>
+                        <input type="text" id="loan_setup" placeholder="e.g., £1,000">
+                    </div>
+                </div>
+                <div class="section">
+                    <h2>Rental Information</h2>
+                    <div class="form-grid">
+                        <label>Monthly Rent:</label>
+                        <input type="text" id="monthly_rent" placeholder="e.g., £800">
+
+                        <label>Council Tax:</label>
+                        <input type="text" id="council_tax" placeholder="e.g., £1,200">
+
+                        <label>Repairs / Maintenance:</label>
+                        <input type="text" id="repairs_maintenance" placeholder="e.g., £500">
+
+                        <label>Electric / Gas:</label>
+                        <input type="text" id="utilities" placeholder="e.g., £600">
+
+                        <label>Water:</label>
+                        <input type="text" id="water" placeholder="e.g., £300">
+
+                        <label>Broadband / TV:</label>
+                        <input type="text" id="broadband_tv" placeholder="e.g., £300">
+
+                        <label>Insurance:</label>
+                        <input type="text" id="insurance" placeholder="e.g., £400">
+                    </div>
+                </div>
+            </div>
+
+            <!-- EPC Tab -->
+            <div id="epc-tab" class="tab-content">
+                <div class="section">
+                    <h2>EPC Information</h2>
+                    <div class="form-grid">
+                        <label>EPC Rating:</label>
+                        <select id="epc_rating">
+                            <option value="">Select rating</option>
+                            <option value="A">A</option>
+                            <option value="B">B</option>
+                            <option value="C">C</option>
+                            <option value="D">D</option>
+                            <option value="E">E</option>
+                            <option value="F">F</option>
+                            <option value="G">G</option>
+                        </select>
+
+                        <label>Current Energy Cost:</label>
+                        <input type="text" id="current_energy_cost" placeholder="e.g., £1,200">
+
+                        <label>Potential Energy Cost:</label>
+                        <input type="text" id="potential_energy_cost" placeholder="e.g., £800">
+
+                        <label>CO2 Emissions (Current):</label>
+                        <input type="text" id="co2_current" placeholder="e.g., 3.2">
+
+                        <label>CO2 Emissions (Potential):</label>
+                        <input type="text" id="co2_potential" placeholder="e.g., 1.8">
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h2>Internet / Broadband Availability</h2>
+                    <div class="form-grid">
+                        <label>Broadband available:</label>
+                        <input type="text" id="broadband_available" placeholder="e.g., Yes (FTTP/FTTC)">
+
+                        <label>Highest available download speed:</label>
+                        <input type="text" id="download_speed" placeholder="e.g., 1 Gbps">
+
+                        <label>Highest available upload speed:</label>
+                        <input type="text" id="upload_speed" placeholder="e.g., 100 Mbps">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Location Tab -->
+            <div id="location-tab" class="tab-content">
+                <div class="section">
+                    <h2>Location Information</h2>
+                    <div class="form-grid">
+                        <label>City:</label>
+                        <input type="text" id="city" placeholder="e.g., Liverpool">
+
+                        <label>City Centre Distance (miles):</label>
+                        <input type="text" id="city_centre_distance" placeholder="e.g., 2.5">
+
+                        <label>Nearest Station:</label>
+                        <input type="text" id="nearest_station" placeholder="e.g., Liverpool Central">
+
+                        <label>Station Distance (miles):</label>
+                        <input type="text" id="station_distance" placeholder="e.g., 0.5">
+
+                        <label>Nearest School:</label>
+                        <input type="text" id="nearest_school" placeholder="e.g., St. Mary's Primary">
+
+                        <label>School Distance (miles):</label>
+                        <input type="text" id="school_distance" placeholder="e.g., 0.3">
+
+                        <label>Local Amenities:</label>
+                        <textarea id="local_amenities" rows="4" placeholder="Enter local amenities"></textarea>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h2>About the City</h2>
+                    <div class="form-grid">
+                        <label>About the City:</label>
+                        <textarea id="about_city" rows="5" placeholder="Short description of the city"></textarea>
+
+                        <label>Population:</label>
+                        <input type="text" id="population" placeholder="e.g., 508,986">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Images Tab -->
+            <div id="images-tab" class="tab-content">
+                <div class="image-section">
+                    <h2>Cover Page Images</h2>
+                    <p class="section-description">First image appears as the large hero photo. Additional images become cover thumbnails.</p>
+                    <div class="image-controls">
+                        <button class="btn btn-primary" onclick="addImages('cover')">Add Images</button>
+                        <button class="btn btn-secondary" onclick="moveImageUp('cover')">Move Up</button>
+                        <button class="btn btn-secondary" onclick="moveImageDown('cover')">Move Down</button>
+                        <button class="btn btn-danger" onclick="removeSelectedImage('cover')">Remove Selected</button>
+                    </div>
+                    <ul id="cover-images" class="image-list"></ul>
+                </div>
+
+                <div class="image-section">
+                    <h2>Property Gallery</h2>
+                    <p class="section-description">General property photos used throughout the report and cover thumbnails.</p>
+                    <div class="image-controls">
+                        <button class="btn btn-primary" onclick="addImages('property')">Add Images</button>
+                        <button class="btn btn-secondary" onclick="moveImageUp('property')">Move Up</button>
+                        <button class="btn btn-secondary" onclick="moveImageDown('property')">Move Down</button>
+                        <button class="btn btn-danger" onclick="removeSelectedImage('property')">Remove Selected</button>
+                    </div>
+                    <ul id="property-images" class="image-list"></ul>
+                </div>
+
+                <div class="image-section">
+                    <h2>Floor Plans</h2>
+                    <p class="section-description">Uploaded plans appear on dedicated floor plan pages.</p>
+                    <div class="image-controls">
+                        <button class="btn btn-primary" onclick="addImages('floor_plans')">Add Images</button>
+                        <button class="btn btn-secondary" onclick="moveImageUp('floor_plans')">Move Up</button>
+                        <button class="btn btn-secondary" onclick="moveImageDown('floor_plans')">Move Down</button>
+                        <button class="btn btn-danger" onclick="removeSelectedImage('floor_plans')">Remove Selected</button>
+                    </div>
+                    <ul id="floor_plans-images" class="image-list"></ul>
+                </div>
+
+                <div class="image-section">
+                    <h2>Directions / Map</h2>
+                    <p class="section-description">Used on the "Getting To The City Centre" page. Only the first image is used.</p>
+                    <div class="image-controls">
+                        <button class="btn btn-primary" onclick="addImages('directions')">Add Images</button>
+                        <button class="btn btn-secondary" onclick="moveImageUp('directions')">Move Up</button>
+                        <button class="btn btn-secondary" onclick="moveImageDown('directions')">Move Down</button>
+                        <button class="btn btn-danger" onclick="removeSelectedImage('directions')">Remove Selected</button>
+                    </div>
+                    <ul id="directions-images" class="image-list"></ul>
+                </div>
+
+                <div class="image-section">
+                    <h2>City Images</h2>
+                    <p class="section-description">Urban lifestyle shots shown together near the end of the report.</p>
+                    <div class="image-controls">
+                        <button class="btn btn-primary" onclick="addImages('city')">Add Images</button>
+                        <button class="btn btn-secondary" onclick="moveImageUp('city')">Move Up</button>
+                        <button class="btn btn-secondary" onclick="moveImageDown('city')">Move Down</button>
+                        <button class="btn btn-danger" onclick="removeSelectedImage('city')">Remove Selected</button>
+                    </div>
+                    <ul id="city-images" class="image-list"></ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="action-buttons">
+            <button class="btn btn-primary btn-large" onclick="generatePDFFile()">Generate Investment Report PDF</button>
+            <button class="btn btn-secondary btn-large" onclick="clearAll()">Clear All</button>
+        </div>
+    </div>
+
+    <script src="renderer.js"></script>
+</body>
+</html>
+

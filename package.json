@@ -1,0 +1,86 @@
+{
+  "name": "property-pdf-builder",
+  "version": "1.0.0",
+  "description": "Property Investment Report PDF Builder - Electron App",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder",
+    "build:win": "cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win",
+    "build:mac": "electron-builder --mac",
+    "build:all": "cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win --mac",
+    "clean": "rmdir /s /q dist-electron 2>nul || rm -rf dist-electron"
+  },
+  "keywords": [
+    "property",
+    "pdf",
+    "investment",
+    "report"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1",
+    "cross-env": "^7.0.3"
+  },
+  "dependencies": {
+    "pdfkit": "^0.14.0",
+    "sharp": "^0.33.0"
+  },
+  "build": {
+    "appId": "com.propertypdf.builder",
+    "productName": "Property PDF Builder",
+    "directories": {
+      "output": "dist-electron"
+    },
+    "files": [
+      "main.js",
+      "renderer.js",
+      "index.html",
+      "styles.css",
+      "pdf-generator.js",
+      "logo.png",
+      "package.json",
+      "sample_images/**/*"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "dir",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "sign": null,
+      "signingHashAlgorithms": null,
+      "verifyUpdateCodeSignature": false,
+      "signDlls": false
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "category": "public.app-category.business"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}
+

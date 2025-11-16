@@ -1,78 +1,32 @@
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
+# Node modules
+node_modules/
+npm-debug.log
+yarn-error.log
 
-# Virtual Environment
+# Electron build output
+dist-electron/
+*.exe
+*.dmg
+*.zip
+*.app
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Python (keep for reference, but we're using Electron now)
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
 venv/
 env/
-ENV/
-.venv
-
-# PyInstaller
-*.spec.bak
-*.manifest
-# Keep spec files (needed for builds)
-!PropertyPDFBuilder.spec
-!PropertyPDFBuilder_macos.spec
-!PropertyPDFBuilder_Debug.spec
+build/
+dist/
 
 # IDE
 .vscode/
 .idea/
 *.swp
 *.swo
-*~
-.DS_Store
-
-# OS
-Thumbs.db
-.DS_Store
-
-# Project specific - build outputs
-# Keep sample images and example PDFs, but ignore generated outputs
-# Uncomment below if you want to ignore all images/PDFs:
-# *.pdf
-# *.webp
-# sample_images/
-
-# Logs
-*.log
-
-# Testing
-.pytest_cache/
-.coverage
-htmlcov/
-
-# Jupyter Notebook
-.ipynb_checkpoints
-
-# pyenv
-.python-version
-
-# Environments
-.env
-.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
-
