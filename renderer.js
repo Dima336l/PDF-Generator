@@ -374,11 +374,21 @@ async function generatePDFFile() {
                 imagesPayload[section] = b64s;
             }
 
-            // Include logo
+            // Include logo - try multiple paths
             let logoBase64 = null;
-            try {
-                logoBase64 = await urlToDataURL('logo.png');
-            } catch (_e) {}
+            const logoPaths = ['logo.png', './logo.png', '/logo.png'];
+            for (const logoPath of logoPaths) {
+                try {
+                    logoBase64 = await urlToDataURL(logoPath);
+                    console.log('Logo loaded from:', logoPath);
+                    break;
+                } catch (e) {
+                    console.warn('Failed to load logo from', logoPath, e);
+                }
+            }
+            if (!logoBase64) {
+                console.warn('Logo not found, PDF will use placeholder or skip logo');
+            }
 
             const resp = await fetch(`${BACKEND_URL}/generate`, {
                 method: 'POST',
