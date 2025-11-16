@@ -275,60 +275,52 @@ function loadMockData() {
 
 // Load default images from sample_images folder
 async function loadDefaultImages() {
+    // Browser mode: preload sample images from the repo
     if (!ipcRenderer) {
-        // Skip in browser – users add images with the file picker
+        const base = 'sample_images/';
+        const defaults = {
+            cover: ['exterior_front.jpg'],
+            property: ['kitchen.jpg', 'bathroom.jpg', 'bedroom.jpg', 'garden.jpeg', 'living_room.png'],
+            floor_plans: ['floorplan1.png', 'floorplan2.png'],
+            directions: ['directions.png'],
+            city: ['liverpool1.jpg', 'liverpool2.jpg', 'liverpool3.jpg']
+        };
+        Object.keys(defaults).forEach(section => {
+            const files = defaults[section];
+            files.forEach(name => {
+                imageSections[section].push({
+                    url: `${base}${name}`,
+                    name
+                });
+            });
+            updateImageList(section);
+        });
         return;
     }
-    
+
+    // Electron mode: read from filesystem
     try {
-        // Get the app directory from main process
         const appPath = await ipcRenderer.invoke('get-app-path');
         const sampleImagesPath = path.join(appPath, 'sample_images');
-        
-        // Check if sample_images folder exists
-        if (!fs.existsSync(sampleImagesPath)) {
-            return;
-        }
+        if (!fs.existsSync(sampleImagesPath)) return;
 
-        // Read all image files
         const files = fs.readdirSync(sampleImagesPath);
         const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp'];
-        
-        const imageFiles = files.filter(file => {
-            const ext = path.extname(file).toLowerCase();
-            return imageExtensions.includes(ext);
-        }).sort();
+        const imageFiles = files.filter(file => imageExtensions.includes(path.extname(file).toLowerCase())).sort();
 
-        // Categorize images based on filename
         imageFiles.forEach(filename => {
             const imagePath = path.join(sampleImagesPath, filename);
             const lowerFilename = filename.toLowerCase();
-            
-            let section = 'property'; // Default section
-            
-            if (lowerFilename.includes('exterior') || lowerFilename.includes('front')) {
-                section = 'cover';
-            } else if (lowerFilename.includes('floor') || lowerFilename.includes('plan')) {
-                section = 'floor_plans';
-            } else if (lowerFilename.includes('direction') || lowerFilename.includes('map')) {
-                section = 'directions';
-            } else if (lowerFilename.includes('liverpool') || lowerFilename.includes('city')) {
-                section = 'city';
-            }
-            
-            // Add to appropriate section
-            if (!imageSections[section]) {
-                imageSections[section] = [];
-            }
+            let section = 'property';
+            if (lowerFilename.includes('exterior') || lowerFilename.includes('front')) section = 'cover';
+            else if (lowerFilename.includes('floor') || lowerFilename.includes('plan')) section = 'floor_plans';
+            else if (lowerFilename.includes('direction') || lowerFilename.includes('map')) section = 'directions';
+            else if (lowerFilename.includes('liverpool') || lowerFilename.includes('city')) section = 'city';
             imageSections[section].push(imagePath);
         });
-
-        // Update all image lists
-        Object.keys(imageSections).forEach(section => {
-            updateImageList(section);
-        });
-    } catch (error) {
-        // Silent fail; UI already has manual image upload
+        Object.keys(imageSections).forEach(section => updateImageList(section));
+    } catch (_err) {
+        // ignore
     }
 }
 
@@ -354,6 +346,15 @@ async function generatePDFFile() {
                 });
 
             const imagesPayload = {};
+            const urlToDataURL = async (url) => {
+                const res = await fetch(url, { mode: 'cors' });
+                const blob = await res.blob();
+                return await new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result);
+                    reader.readAsDataURL(blob);
+                });
+            };
             const sections = Object.keys(imageSections);
             for (const section of sections) {
                 const items = imageSections[section] || [];
@@ -363,6 +364,10 @@ async function generatePDFFile() {
                         // Browser object with File
                         // eslint-disable-next-line no-await-in-loop
                         const b64 = await fileToDataURL(item.file);
+                        b64s.push(b64);
+                    } else if (item && item.url) {
+                        // eslint-disable-next-line no-await-in-loop
+                        const b64 = await urlToDataURL(item.url);
                         b64s.push(b64);
                     }
                 }
