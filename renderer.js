@@ -1,16 +1,22 @@
-// Detect environment: Electron vs Browser
+// Detect environment: Electron vs Browser (avoid touching undefined require)
 let ipcRenderer = null;
 let path = null;
 let fs = null;
 let generatePDF = null;
-try {
-    ipcRenderer = require('electron').ipcRenderer;
-    path = require('path');
-    fs = require('fs');
-    generatePDF = require('./pdf-generator').generatePDF;
-} catch (e) {
-    // Running on the web (no Electron/Node require)
-}
+(() => {
+    const hasWindowRequire = typeof window !== 'undefined' && typeof window.require === 'function';
+    const hasRequire = typeof require !== 'undefined';
+    const r = hasWindowRequire ? window.require : (hasRequire ? require : null);
+    if (!r) return; // browser mode
+    try {
+        ipcRenderer = r('electron').ipcRenderer;
+        path = r('path');
+        fs = r('fs');
+        generatePDF = r('./pdf-generator').generatePDF;
+    } catch (e) {
+        // stay in browser mode
+    }
+})();
 
 // Image storage
 const imageSections = {
