@@ -1307,33 +1307,51 @@ out center meta;`;
                 updateImageList('directions');
                 console.log('Added composite map image to directions section. Total directions images:', imageSections.directions.length);
                 
-                // Fetch city images from Wikimedia Commons (free, reliable)
-                // Try to get city-specific images from Wikipedia/Wikimedia
+                // Fetch city images - try Wikipedia API first, fallback to Unsplash (both CORS-compatible)
                 const fetchCityImages = async () => {
                     try {
-                        // Try to get images from Wikipedia page
+                        // Try Wikipedia API which provides CORS-compatible thumbnail URLs
                         const wikiImageUrl = `https://en.wikipedia.org/api/rest_v1/page/media-list/${encodeURIComponent(city)}`;
-                        const imageResponse = await fetchWithTimeout(wikiImageUrl, {}, 5000);
+                        const imageResponse = await fetchWithTimeout(wikiImageUrl, {
+                            headers: {
+                                'User-Agent': 'PropertyPDFBuilder/1.0'
+                            }
+                        }, 5000);
                         
                         if (imageResponse.ok) {
                             const imageData = await imageResponse.json();
                             const images = imageData.items || [];
                             
-                            // Filter for city/landscape images and get up to 3
+                            // Filter and get up to 3 city images with thumbnail URLs (CORS-compatible)
                             const cityImages = images
                                 .filter(item => {
                                     const title = (item.title || '').toLowerCase();
-                                    return title.includes('jpg') || title.includes('png') || title.includes('jpeg');
+                                    const type = (item.type || '').toLowerCase();
+                                    // Filter for images, exclude logos/flags/coats
+                                    return type === 'image' && 
+                                           !title.includes('logo') && 
+                                           !title.includes('flag') && 
+                                           !title.includes('coat') &&
+                                           !title.includes('emblem');
                                 })
                                 .slice(0, 3)
                                 .map(item => {
-                                    // Convert Wikipedia image title to URL
-                                    const imageTitle = encodeURIComponent(item.title.replace(/ /g, '_'));
+                                    // Use thumbnail source URL which supports CORS
+                                    let imageUrl;
+                                    if (item.thumbnail && item.thumbnail.source) {
+                                        // Replace thumbnail size with 800px width
+                                        imageUrl = item.thumbnail.source.replace(/\/\d+px-/, '/800px-');
+                                    } else {
+                                        // Skip if no thumbnail
+                                        return null;
+                                    }
+                                    
                                     return {
-                                        url: `https://commons.wikimedia.org/wiki/Special:FilePath/${imageTitle}?width=800`,
+                                        url: imageUrl,
                                         name: `${city} - ${item.title.split(':').pop()}`
                                     };
-                                });
+                                })
+                                .filter(img => img !== null);
                             
                             if (cityImages.length > 0) {
                                 return cityImages;
@@ -1343,11 +1361,12 @@ out center meta;`;
                         console.warn('Could not fetch Wikipedia images:', e);
                     }
                     
-                    // Fallback: Use generic city/urban images from Unsplash
+                    // Fallback: Use Unsplash images (CORS-compatible)
+                    // Using direct Unsplash image URLs that support CORS
                     return [
-                        { url: 'https://images.unsplash.com/photo-1514565131-fce0801e5785?w=800&h=600&fit=crop&q=80', name: `${city} - City View 1` },
-                        { url: 'https://images.unsplash.com/photo-1449824913935-59a10b8d2000?w=800&h=600&fit=crop&q=80', name: `${city} - City View 2` },
-                        { url: 'https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?w=800&h=600&fit=crop&q=80', name: `${city} - City View 3` }
+                        { url: `https://images.unsplash.com/photo-1514565131-fce0801e5785?w=800&h=600&fit=crop&q=80&auto=format`, name: `${city} - City View 1` },
+                        { url: `https://images.unsplash.com/photo-1449824913935-59a10b8d2000?w=800&h=600&fit=crop&q=80&auto=format`, name: `${city} - City View 2` },
+                        { url: `https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?w=800&h=600&fit=crop&q=80&auto=format`, name: `${city} - City View 3` }
                     ];
                 };
                 
