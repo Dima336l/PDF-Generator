@@ -859,8 +859,8 @@ function createOtherKeyInformationPage(doc, data, images, logoPath) {
        .text(data.upload_speed || 'N/A', col3X, currentY + 15);
 }
 
-// Create Getting To The City Centre page
-function createCityCentrePage(doc, data, images, logoPath) {
+// Create City Map page
+function createCityMapPage(doc, data, images, logoPath) {
     drawHeader(doc, logoPath);
     
     // Calculate content Y position (below header)
@@ -870,7 +870,7 @@ function createCityCentrePage(doc, data, images, logoPath) {
     doc.fontSize(24)
        .font('Helvetica-Bold')
        .fillColor('#000000')
-       .text('Getting To The City Centre', MARGIN, currentY);
+       .text('City Map', MARGIN, currentY);
     currentY += 30;
 
     // Directions image - full width (7 inches), target max height ~2.6 inches (match original)
@@ -896,15 +896,40 @@ function createCityCentrePage(doc, data, images, logoPath) {
         }
     }
     
-    // Display directions image with proper aspect ratio
-    const directionsImgWidth = 7 * INCH;
-    const directionsImgMaxHeight = 2.6 * INCH; // close to original reference height
+    // Display city map image - match width of the 3 city images container below
+    // City images container: 3 images at 2.3 inches each + spacing = A4_WIDTH - (2 * MARGIN)
+    // Map is always 1280x768 pixels (aspect ratio 1.6667:1)
+    const cityImagesContainerWidth = A4_WIDTH - (2 * MARGIN); // Same as city images container
+    const directionsImgWidth = cityImagesContainerWidth; // Width in points
+    const mapAspectRatio = 1280 / 768; // Known aspect ratio of composite map
+    const directionsImgHeight = directionsImgWidth / mapAspectRatio; // Calculate height from aspect ratio
     
-    // Add image centered within the box while preserving aspect ratio
-    addImageToPDF(doc, directionsPath, MARGIN, currentY, directionsImgWidth, directionsImgMaxHeight, 'contain');
+    // Use explicit width and height to ensure proper scaling
+    // This ensures the map uses the full width and displays at the correct size
+    try {
+        if (directionsPath && fs.existsSync(directionsPath)) {
+            doc.image(directionsPath, MARGIN, currentY, {
+                width: directionsImgWidth,
+                height: directionsImgHeight,
+                align: 'center',
+                valign: 'top'
+            });
+        } else {
+            // Draw placeholder if image doesn't exist
+            doc.rect(MARGIN, currentY, directionsImgWidth, directionsImgHeight)
+               .fillColor('#CCCCCC')
+               .fill();
+        }
+    } catch (error) {
+        console.error('Error adding map image:', error);
+        // Draw placeholder on error
+        doc.rect(MARGIN, currentY, directionsImgWidth, directionsImgHeight)
+           .fillColor('#CCCCCC')
+           .fill();
+    }
     
-    // Advance by the allocated max height to avoid overlap
-    currentY += directionsImgMaxHeight + 20;
+    // Advance by the actual image height to avoid overlap
+    currentY += directionsImgHeight + 20;
 
     // About the City section (always render, like original)
     doc.fontSize(14)
@@ -1121,7 +1146,7 @@ function generatePDF(data, images, outputPath, logoPath) {
             doc.addPage();
 
             // Getting To The City Centre page
-            createCityCentrePage(doc, data, images, logoPath);
+            createCityMapPage(doc, data, images, logoPath);
 
             doc.end();
 

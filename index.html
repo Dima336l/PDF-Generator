@@ -204,6 +204,15 @@
                         <label>Population:</label>
                         <input type="text" id="population" placeholder="e.g., 508,986">
                     </div>
+                    <div style="text-align: center; margin-top: 20px;">
+                        <button class="btn btn-primary" onclick="fetchLocationData()" id="fetch-location-btn">
+                            <span id="fetch-location-text">Fetch Location Data</span>
+                            <span id="fetch-location-spinner" style="display: none;">Loading...</span>
+                        </button>
+                        <p style="margin-top: 8px; color: #666; font-size: 0.9em;">
+                            Enter the property address and postal code first, then click to automatically fill location fields.
+                        </p>
+                    </div>
                 </div>
             </div>
 
@@ -246,8 +255,8 @@
                 </div>
 
                 <div class="image-section">
-                    <h2>Directions / Map</h2>
-                    <p class="section-description">Used on the "Getting To The City Centre" page. Only the first image is used.</p>
+                    <h2>City Map</h2>
+                    <p class="section-description">Map of the capital city shown on the "City Map" page. Only the first image is used.</p>
                     <div class="image-controls">
                         <button class="btn btn-primary" onclick="addImages('directions')">Add Images</button>
                         <button class="btn btn-secondary" onclick="moveImageUp('directions')">Move Up</button>
@@ -278,7 +287,6 @@
         </div>
     </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" integrity="sha512-/F6N1mAmiFv1nIh8h4F4QY0S6v2j3czPp3S6h4oJH0aJtD0g5xkqf8dCdnxM2u3v7c9gqvQ6qz8h8cWcG1e3Mg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script src="renderer.js"></script>
 </body>
 </html>
