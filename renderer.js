@@ -1307,22 +1307,29 @@ out center meta;`;
                 updateImageList('directions');
                 console.log('Added composite map image to directions section. Total directions images:', imageSections.directions.length);
                 
-                // Fetch city-specific images using Unsplash Source API with search terms
-                // This provides city-specific images without requiring API authentication
+                // Fetch city-specific images using Unsplash Source API
+                // Using /featured/ endpoint with city-specific search terms
                 const fetchCityImages = async () => {
-                    // Use Unsplash Source API with city-specific search terms
-                    // Format: https://source.unsplash.com/800x600/?{search-terms}
-                    // This will return random but relevant images for the search terms
-                    const searchTerms = [
-                        `${city} UK landmark`,
-                        `${city} UK cityscape`,
-                        `${city} UK architecture`
-                    ];
+                    // Use Unsplash Source API /featured/ endpoint with city-specific search
+                    // Format: https://source.unsplash.com/featured/800x600/?{city-name}
+                    // Adding timestamp to prevent caching and ensure fresh images
+                    const timestamp = Date.now();
+                    const citySearch = city.toLowerCase().replace(/\s+/g, '');
                     
-                    return searchTerms.map((terms, idx) => ({
-                        url: `https://source.unsplash.com/800x600/?${encodeURIComponent(terms)}`,
-                        name: `${city} - ${['Landmark', 'Cityscape', 'Architecture'][idx]}`
-                    }));
+                    return [
+                        {
+                            url: `https://source.unsplash.com/featured/800x600/?${encodeURIComponent(citySearch + ',uk,landmark')}&sig=${timestamp}`,
+                            name: `${city} - Landmark`
+                        },
+                        {
+                            url: `https://source.unsplash.com/featured/800x600/?${encodeURIComponent(citySearch + ',uk,city')}&sig=${timestamp + 1}`,
+                            name: `${city} - City View`
+                        },
+                        {
+                            url: `https://source.unsplash.com/featured/800x600/?${encodeURIComponent(citySearch + ',uk,architecture')}&sig=${timestamp + 2}`,
+                            name: `${city} - Architecture`
+                        }
+                    ];
                 };
                 
                 // Add city images to city section (replace any existing)
