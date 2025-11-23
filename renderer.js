@@ -1307,25 +1307,22 @@ out center meta;`;
                 updateImageList('directions');
                 console.log('Added composite map image to directions section. Total directions images:', imageSections.directions.length);
                 
-                // Fetch city images from Unsplash (CORS-compatible and reliable)
-                // Using Unsplash directly to avoid CORS issues with Wikimedia Commons
+                // Fetch city-specific images using Unsplash Source API with search terms
+                // This provides city-specific images without requiring API authentication
                 const fetchCityImages = async () => {
-                    // Use Unsplash images directly - they support CORS and work from any origin
-                    // Using a variety of city/urban/architecture photos
-                    return [
-                        { 
-                            url: `https://images.unsplash.com/photo-1514565131-fce0801e5785?w=800&h=600&fit=crop&q=80&auto=format`, 
-                            name: `${city} - City View 1` 
-                        },
-                        { 
-                            url: `https://images.unsplash.com/photo-1449824913935-59a10b8d2000?w=800&h=600&fit=crop&q=80&auto=format`, 
-                            name: `${city} - City View 2` 
-                        },
-                        { 
-                            url: `https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?w=800&h=600&fit=crop&q=80&auto=format`, 
-                            name: `${city} - City View 3` 
-                        }
+                    // Use Unsplash Source API with city-specific search terms
+                    // Format: https://source.unsplash.com/800x600/?{search-terms}
+                    // This will return random but relevant images for the search terms
+                    const searchTerms = [
+                        `${city} UK landmark`,
+                        `${city} UK cityscape`,
+                        `${city} UK architecture`
                     ];
+                    
+                    return searchTerms.map((terms, idx) => ({
+                        url: `https://source.unsplash.com/800x600/?${encodeURIComponent(terms)}`,
+                        name: `${city} - ${['Landmark', 'Cityscape', 'Architecture'][idx]}`
+                    }));
                 };
                 
                 // Add city images to city section (replace any existing)
