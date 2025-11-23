@@ -1,4 +1,5 @@
 {
+<<<<<<< HEAD
   "name": "property-pdf-builder",
   "version": "1.0.0",
   "description": "Property Investment Report PDF Builder - Electron App",
@@ -87,3 +88,21 @@
   }
 }
 
+=======
+  "name": "pdf-generator-backend",
+  "version": "1.0.0",
+  "description": "Backend API to generate Property PDF using pdfkit",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "pdfkit": "^0.13.0"
+  }
+}
+
+
+>>>>>>> fb76a1255f9263d795807ab96e2fc12d307fcdfc

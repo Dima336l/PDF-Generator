@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Node modules
 node_modules/
 npm-debug.log
@@ -30,3 +31,11 @@ dist/
 .idea/
 *.swp
 *.swo
+=======
+node_modules
+.env
+npm-debug.log*
+*.log
+
+
+>>>>>>> fb76a1255f9263d795807ab96e2fc12d307fcdfc

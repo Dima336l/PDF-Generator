@@ -859,8 +859,13 @@ function createOtherKeyInformationPage(doc, data, images, logoPath) {
        .text(data.upload_speed || 'N/A', col3X, currentY + 15);
 }
 
+<<<<<<< HEAD
 // Create City Map page
 function createCityMapPage(doc, data, images, logoPath) {
+=======
+// Create Getting To The City Centre page
+function createCityCentrePage(doc, data, images, logoPath) {
+>>>>>>> fb76a1255f9263d795807ab96e2fc12d307fcdfc
     drawHeader(doc, logoPath);
     
     // Calculate content Y position (below header)
@@ -870,7 +875,11 @@ function createCityMapPage(doc, data, images, logoPath) {
     doc.fontSize(24)
        .font('Helvetica-Bold')
        .fillColor('#000000')
+<<<<<<< HEAD
        .text('City Map', MARGIN, currentY);
+=======
+       .text('Getting To The City Centre', MARGIN, currentY);
+>>>>>>> fb76a1255f9263d795807ab96e2fc12d307fcdfc
     currentY += 30;
 
     // Directions image - full width (7 inches), target max height ~2.6 inches (match original)
@@ -896,6 +905,7 @@ function createCityMapPage(doc, data, images, logoPath) {
         }
     }
     
+<<<<<<< HEAD
     // Display city map image - match width of the 3 city images container below
     // City images container: 3 images at 2.3 inches each + spacing = A4_WIDTH - (2 * MARGIN)
     // Map is always 1280x768 pixels (aspect ratio 1.6667:1)
@@ -930,6 +940,17 @@ function createCityMapPage(doc, data, images, logoPath) {
     
     // Advance by the actual image height to avoid overlap
     currentY += directionsImgHeight + 20;
+=======
+    // Display directions image with proper aspect ratio
+    const directionsImgWidth = 7 * INCH;
+    const directionsImgMaxHeight = 2.6 * INCH; // close to original reference height
+    
+    // Add image centered within the box while preserving aspect ratio
+    addImageToPDF(doc, directionsPath, MARGIN, currentY, directionsImgWidth, directionsImgMaxHeight, 'contain');
+    
+    // Advance by the allocated max height to avoid overlap
+    currentY += directionsImgMaxHeight + 20;
+>>>>>>> fb76a1255f9263d795807ab96e2fc12d307fcdfc
 
     // About the City section (always render, like original)
     doc.fontSize(14)
@@ -1146,7 +1167,11 @@ function generatePDF(data, images, outputPath, logoPath) {
             doc.addPage();
 
             // Getting To The City Centre page
+<<<<<<< HEAD
             createCityMapPage(doc, data, images, logoPath);
+=======
+            createCityCentrePage(doc, data, images, logoPath);
+>>>>>>> fb76a1255f9263d795807ab96e2fc12d307fcdfc
 
             doc.end();
 
