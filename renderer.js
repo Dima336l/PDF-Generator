@@ -21,9 +21,18 @@ let generatePDF = null;
 // Backend URL for web builds
 // Use local backend if available, otherwise use hosted backend
 let BACKEND_URL = (() => {
-    // Allow manual override via localStorage for testing
+    // Allow manual override via localStorage for testing (only in development)
     if (typeof Storage !== 'undefined' && localStorage.getItem('backend_url')) {
-        return localStorage.getItem('backend_url');
+        const override = localStorage.getItem('backend_url');
+        // Only allow localhost override if we're actually on localhost
+        if (override.includes('localhost') && typeof window !== 'undefined' && window.location && 
+            (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+            return override;
+        }
+        // For production, ignore localhost overrides
+        if (!override.includes('localhost')) {
+            return override;
+        }
     }
     
     // Check if we're in Electron (local development)
@@ -32,13 +41,13 @@ let BACKEND_URL = (() => {
         return 'http://localhost:8080';
     }
     
-    // Check if we're running on localhost (browser mode)
+    // Check if we're running on localhost (browser mode - development)
     if (typeof window !== 'undefined' && window.location && 
         (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
         return 'http://localhost:8080';
     }
     
-    // Default to hosted backend for production
+    // Production: Always use hosted backend
     return 'https://pdf-generator-backend-fbtb.onrender.com';
 })();
 
@@ -199,10 +208,37 @@ window.removeSelectedImage = removeSelectedImage;
 function getFormData() {
     const data = {};
     
-    // Get all input fields
-    const inputs = document.querySelectorAll('input, textarea, select');
-    inputs.forEach(input => {
-        if (input.id) {
+    // Get selected calculators (multiple)
+    const checkboxes = document.querySelectorAll('.calculator-checkbox input[type="checkbox"]:checked');
+    const selectedCalculators = Array.from(checkboxes).map(cb => cb.dataset.calculator);
+    data.selected_calculators = selectedCalculators;
+    
+    // If only one calculator selected, also set calculator_type for backward compatibility
+    if (selectedCalculators.length === 1) {
+        data.calculator_type = selectedCalculators[0];
+    }
+    
+    // Get calculator-specific data
+    selectedCalculators.forEach(calcType => {
+        const calcData = {};
+        const calcInputs = document.querySelectorAll(`[data-calculator="${calcType}"]`);
+        calcInputs.forEach(input => {
+            if (input.dataset.originalId) {
+                // Use original field ID (without calculator prefix)
+                calcData[input.dataset.originalId] = input.value.trim();
+            }
+        });
+        data[`calculator_${calcType}`] = calcData;
+    });
+    
+    // Get all other input fields (property info, EPC, location, etc.)
+    const allInputs = document.querySelectorAll('input, textarea, select');
+    allInputs.forEach(input => {
+        // Skip calculator-specific fields (they're handled above) and checkboxes
+        if (input.type === 'checkbox' || input.dataset.calculator) {
+            return;
+        }
+        if (input.id && !input.id.startsWith('calc-')) {
             data[input.id] = input.value.trim();
         }
     });
@@ -236,6 +272,7 @@ window.clearAll = clearAll;
 // Load mock data on page load
 function loadMockData() {
     const mockData = {
+        // Property Info
         'address': '5, Ridley Road',
         'postal_code': 'L6 6DN',
         'property_type': 'Semi-Detached House',
@@ -246,6 +283,8 @@ function loadMockData() {
         'days_on_market': '6',
         'key_features': 'Spacious Three Storey HMO Property\nFive Spacious En-Suite Double Bedrooms\nFantastic Investment Opportunity\nContemporary Fitted Kitchen\nCommunal Lounge\nSunny Rear Courtyard\nYield of 10.31%\nClose To Great Local Amenities, Train Station And Road Links\nClose To City Centre\nEPC GRADE = C',
         'description': 'Beautiful semi-detached family home in excellent condition. Features include modern kitchen, spacious living areas, and a well-maintained garden. Perfect for families looking for comfort and convenience. Located in a quiet residential area with excellent transport links.',
+        
+        // Standard BTL / Purchase Calculator (default)
         'purchase_price': '£290,000',
         'deposit_percent': '20',
         'monthly_rent': '£2,750',
@@ -260,17 +299,51 @@ function loadMockData() {
         'survey_cost': '£800',
         'legal_fees': '£2,400',
         'loan_setup': '£4,640',
+        
+        // BRR Calculator
+        'refurb_cost': '£25,000',
+        'after_refurb_value': '£350,000',
+        'refinance_ltv': '75',
+        
+        // Flip Calculator
+        'sale_price': '£320,000',
+        'holding_period': '6',
+        'legal_fees_sale': '£1,200',
+        'estate_agent_fees': '£3,200',
+        'finance_cost': '£2,500',
+        
+        // Holiday Let Calculator
+        'weekly_rent': '£450',
+        'occupancy_rate': '65', // Default, will be overridden per calculator
+        'management_fee': '20', // Percentage for Holiday Let
+        'cleaning_fee': '£50',
+        
+        // Rent to HMO Calculator
+        'monthly_rent_paid': '£1,200',
+        'number_of_rooms': '5',
+        'rent_per_room': '£550',
+        'management_fee_annual': '£1,200', // Annual currency for Rent to HMO
+        
+        // Rent to Serviced Accommodation Calculator
+        'daily_rate': '£85',
+        // Note: occupancy_rate and management_fee values will be set per calculator below
+        
+        // EPC
         'epc_rating': 'C',
         'current_energy_cost': '£1,200',
         'potential_energy_cost': '£800',
         'co2_current': '3.2',
         'co2_potential': '1.8',
-        // Internet / Broadband mock data
+        
+        // Internet / Broadband
         'broadband_available': 'Yes (FTTP available)',
         'download_speed': '1 Gbps',
         'upload_speed': '100 Mbps'
     };
 
+    // Store mock data globally for use in dynamically created calculator fields
+    window.mockDataStore = mockData;
+    
     // Populate form fields
     Object.keys(mockData).forEach(fieldId => {
         const element = document.getElementById(fieldId);
@@ -282,6 +355,15 @@ function loadMockData() {
             }
         }
     });
+    
+    // Auto-select Standard BTL calculator and show fields
+    setTimeout(() => {
+        const standardBTLCheckbox = document.getElementById('calc-standard-btl');
+        if (standardBTLCheckbox) {
+            standardBTLCheckbox.checked = true;
+            updateCalculatorSelection();
+        }
+    }, 100);
 }
 
 // Load default images from sample_images folder
@@ -404,6 +486,11 @@ async function generatePDFFile() {
                 console.warn('Logo not found, PDF will use placeholder or skip logo');
             }
 
+            // Debug logging
+            console.log('Frontend - selected_calculators:', data.selected_calculators);
+            console.log('Frontend - calculator data keys:', Object.keys(data).filter(k => k.startsWith('calculator_')));
+            console.log('Frontend - full data object:', JSON.stringify(data, null, 2));
+            
             const resp = await fetch(`${BACKEND_URL}/generate`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1200,7 +1287,7 @@ out center meta;`;
                 // Fetch map image - create a composite from multiple tiles for a larger, wider view
                 // Use city center coordinates for the map (shows the capital city, not the property)
                 
-                const z = 13; // Zoom level 13 for good detail without being too zoomed in
+                const z = 15; // Zoom level 15 for more detailed, zoomed-in view
                 const centerX = Math.floor((cityLon + 180) / 360 * Math.pow(2, z));
                 const centerY = Math.floor((1 - Math.log(Math.tan(cityLat * Math.PI / 180) + 1 / Math.cos(cityLat * Math.PI / 180)) / Math.PI) / 2 * Math.pow(2, z));
                 
@@ -1307,36 +1394,77 @@ out center meta;`;
                 updateImageList('directions');
                 console.log('Added composite map image to directions section. Total directions images:', imageSections.directions.length);
                 
-                // Fetch city-specific images using Unsplash Source API
-                // Using /featured/ endpoint with city-specific search terms
+                // Fetch city-specific images using backend search endpoint
                 const fetchCityImages = async () => {
-                    // Use Unsplash Source API /featured/ endpoint with city-specific search
-                    // Format: https://source.unsplash.com/featured/800x600/?{city-name}
-                    // Adding timestamp to prevent caching and ensure fresh images
-                    const timestamp = Date.now();
-                    const citySearch = city.toLowerCase().replace(/\s+/g, '');
+                    const citySearch = city.toLowerCase();
+                    const cityImages = [];
                     
-                    return [
-                        {
-                            url: `https://source.unsplash.com/featured/800x600/?${encodeURIComponent(citySearch + ',uk,landmark')}&sig=${timestamp}`,
-                            name: `${city} - Landmark`
-                        },
-                        {
-                            url: `https://source.unsplash.com/featured/800x600/?${encodeURIComponent(citySearch + ',uk,city')}&sig=${timestamp + 1}`,
-                            name: `${city} - City View`
-                        },
-                        {
-                            url: `https://source.unsplash.com/featured/800x600/?${encodeURIComponent(citySearch + ',uk,architecture')}&sig=${timestamp + 2}`,
-                            name: `${city} - Architecture`
+                    try {
+                        // Get image URLs from backend
+                        const searchUrl = `${BACKEND_URL}/search-city-images?city=${encodeURIComponent(citySearch)}`;
+                        const searchResponse = await fetch(searchUrl);
+                        
+                        if (searchResponse.ok) {
+                            const imageData = await searchResponse.json();
+                            if (imageData.images && imageData.images.length > 0) {
+                                // Fetch each image through proxy and convert to blob URL
+                                // Try up to 3 images, with fallback options if one fails
+                                for (let idx = 0; idx < 3; idx++) {
+                                    let imageLoaded = false;
+                                    const imageName = ['Landmark', 'City View', 'Architecture'][idx];
+                                    
+                                    // Try primary image, then fallbacks if available
+                                    for (let attempt = 0; attempt < 3 && !imageLoaded; attempt++) {
+                                        const imgIndex = idx + attempt; // Use primary or fallback
+                                        if (imgIndex >= imageData.images.length) break;
+                                        
+                                        const imgUrl = imageData.images[imgIndex];
+                                        const proxyUrl = `${BACKEND_URL}/proxy-image?url=${encodeURIComponent(imgUrl)}`;
+                                        
+                                        try {
+                                            console.log(`Fetching city image ${idx + 1} (attempt ${attempt + 1}) from:`, imgUrl);
+                                            const response = await fetch(proxyUrl);
+                                            if (response.ok) {
+                                                const blob = await response.blob();
+                                                const blobUrl = URL.createObjectURL(blob);
+                                                cityImages.push({
+                                                    url: blobUrl,
+                                                    name: `${city} - ${imageName}`
+                                                });
+                                                console.log(`Successfully loaded city image ${idx + 1}`);
+                                                imageLoaded = true;
+                                            } else {
+                                                console.warn(`Failed to fetch image ${idx + 1} (attempt ${attempt + 1}):`, response.status);
+                                            }
+                                        } catch (err) {
+                                            console.warn(`Error loading image ${idx + 1} (attempt ${attempt + 1}):`, err);
+                                        }
+                                    }
+                                    
+                                    if (!imageLoaded) {
+                                        console.warn(`Could not load image ${idx + 1} after all attempts`);
+                                    }
+                                }
+                            }
+                        } else {
+                            console.warn('Failed to search for city images:', searchResponse.status);
                         }
-                    ];
+                    } catch (err) {
+                        console.warn('Error fetching city images:', err);
+                    }
+                    
+                    return cityImages;
                 };
                 
                 // Add city images to city section (replace any existing)
                 fetchCityImages().then(cityImages => {
-                    imageSections.city = cityImages; // Replace all existing images
-                    updateImageList('city');
-                    console.log('Added city images to city section:', cityImages.length);
+                    if (cityImages.length > 0) {
+                        imageSections.city = cityImages; // Replace all existing images
+                        updateImageList('city');
+                        console.log('Added city images to city section:', cityImages.length);
+                    } else {
+                        console.warn('No city images were loaded');
+                    }
                 }).catch(err => {
                     console.warn('Error fetching city images:', err);
                 });
@@ -1367,6 +1495,293 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
         Math.sin(dLon / 2) * Math.sin(dLon / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
+}
+
+// Calculator selection and field management
+const calculatorConfigs = {
+    'standard-btl': {
+        title: 'Standard Buy to Let',
+        fields: [
+            { label: 'Purchase Price', id: 'purchase_price', type: 'currency', required: true },
+            { label: 'Deposit (%)', id: 'deposit_percent', type: 'number', required: true },
+            { label: 'Mortgage Rate (%)', id: 'mortgage_rate', type: 'number', required: true },
+            { label: 'Monthly Rent', id: 'monthly_rent', type: 'currency', required: true },
+            { label: 'Stamp Duty', id: 'stamp_duty', type: 'currency' },
+            { label: 'Survey Cost', id: 'survey_cost', type: 'currency' },
+            { label: 'Legal Fees', id: 'legal_fees', type: 'currency' },
+            { label: 'Loan Set-up', id: 'loan_setup', type: 'currency' },
+            { label: 'Council Tax (Annual)', id: 'council_tax', type: 'currency' },
+            { label: 'Repairs / Maintenance (Annual)', id: 'repairs_maintenance', type: 'currency' },
+            { label: 'Utilities (Annual)', id: 'utilities', type: 'currency' },
+            { label: 'Water (Annual)', id: 'water', type: 'currency' },
+            { label: 'Broadband / TV (Annual)', id: 'broadband_tv', type: 'currency' },
+            { label: 'Insurance (Annual)', id: 'insurance', type: 'currency' }
+        ]
+    },
+    'brr': {
+        title: 'Buy Refurbish Refinance',
+        fields: [
+            { label: 'Purchase Price', id: 'purchase_price', type: 'currency', required: true },
+            { label: 'Refurbishment Cost', id: 'refurb_cost', type: 'currency', required: true },
+            { label: 'After Refurb Value', id: 'after_refurb_value', type: 'currency', required: true },
+            { label: 'Deposit (%)', id: 'deposit_percent', type: 'number', required: true },
+            { label: 'Mortgage Rate (%)', id: 'mortgage_rate', type: 'number', required: true },
+            { label: 'Refinance LTV (%)', id: 'refinance_ltv', type: 'number', required: true },
+            { label: 'Monthly Rent', id: 'monthly_rent', type: 'currency', required: true },
+            { label: 'Stamp Duty', id: 'stamp_duty', type: 'currency' },
+            { label: 'Survey Cost', id: 'survey_cost', type: 'currency' },
+            { label: 'Legal Fees', id: 'legal_fees', type: 'currency' },
+            { label: 'Council Tax (Annual)', id: 'council_tax', type: 'currency' },
+            { label: 'Repairs / Maintenance (Annual)', id: 'repairs_maintenance', type: 'currency' },
+            { label: 'Insurance (Annual)', id: 'insurance', type: 'currency' }
+        ]
+    },
+    'flip': {
+        title: 'Flip',
+        fields: [
+            { label: 'Purchase Price', id: 'purchase_price', type: 'currency', required: true },
+            { label: 'Refurbishment Cost', id: 'refurb_cost', type: 'currency', required: true },
+            { label: 'Expected Sale Price', id: 'sale_price', type: 'currency', required: true },
+            { label: 'Holding Period (Months)', id: 'holding_period', type: 'number', required: true },
+            { label: 'Stamp Duty', id: 'stamp_duty', type: 'currency' },
+            { label: 'Survey Cost', id: 'survey_cost', type: 'currency' },
+            { label: 'Legal Fees (Purchase)', id: 'legal_fees', type: 'currency' },
+            { label: 'Legal Fees (Sale)', id: 'legal_fees_sale', type: 'currency' },
+            { label: 'Estate Agent Fees', id: 'estate_agent_fees', type: 'currency' },
+            { label: 'Finance Cost (if applicable)', id: 'finance_cost', type: 'currency' }
+        ]
+    },
+    'holiday-let': {
+        title: 'Holiday Let',
+        fields: [
+            { label: 'Purchase Price', id: 'purchase_price', type: 'currency', required: true },
+            { label: 'Deposit (%)', id: 'deposit_percent', type: 'number', required: true },
+            { label: 'Mortgage Rate (%)', id: 'mortgage_rate', type: 'number', required: true },
+            { label: 'Weekly Rental Income', id: 'weekly_rent', type: 'currency', required: true },
+            { label: 'Occupancy Rate (%)', id: 'occupancy_rate', type: 'number', required: true },
+            { label: 'Management Fee (%)', id: 'management_fee', type: 'number' },
+            { label: 'Cleaning Fee (per booking)', id: 'cleaning_fee', type: 'currency' },
+            { label: 'Council Tax (Annual)', id: 'council_tax', type: 'currency' },
+            { label: 'Insurance (Annual)', id: 'insurance', type: 'currency' },
+            { label: 'Utilities (Annual)', id: 'utilities', type: 'currency' }
+        ]
+    },
+    'rent-to-hmo': {
+        title: 'Rent to HMO',
+        fields: [
+            { label: 'Monthly Rent (to Landlord)', id: 'monthly_rent_paid', type: 'currency', required: true },
+            { label: 'Number of Rooms', id: 'number_of_rooms', type: 'number', required: true },
+            { label: 'Monthly Rent per Room', id: 'rent_per_room', type: 'currency', required: true },
+            { label: 'Occupancy Rate (%)', id: 'occupancy_rate', type: 'number', required: true },
+            { label: 'Council Tax (Annual)', id: 'council_tax', type: 'currency' },
+            { label: 'Utilities (Annual)', id: 'utilities', type: 'currency' },
+            { label: 'Insurance (Annual)', id: 'insurance', type: 'currency' },
+            { label: 'Management Fee (Annual)', id: 'management_fee_annual', type: 'currency' }
+        ]
+    },
+    'rent-to-serviced': {
+        title: 'Rent to Serviced Accommodation',
+        fields: [
+            { label: 'Monthly Rent (to Landlord)', id: 'monthly_rent_paid', type: 'currency', required: true },
+            { label: 'Daily Rate', id: 'daily_rate', type: 'currency', required: true },
+            { label: 'Occupancy Rate (%)', id: 'occupancy_rate', type: 'number', required: true },
+            { label: 'Cleaning Fee (per booking)', id: 'cleaning_fee', type: 'currency' },
+            { label: 'Management Fee (%)', id: 'management_fee', type: 'number' },
+            { label: 'Council Tax (Annual)', id: 'council_tax', type: 'currency' },
+            { label: 'Utilities (Annual)', id: 'utilities', type: 'currency' },
+            { label: 'Insurance (Annual)', id: 'insurance', type: 'currency' }
+        ]
+    },
+    'purchase': {
+        title: 'Purchase Calculator',
+        fields: [
+            { label: 'Purchase Price', id: 'purchase_price', type: 'currency', required: true },
+            { label: 'Deposit (%)', id: 'deposit_percent', type: 'number', required: true },
+            { label: 'Mortgage Rate (%)', id: 'mortgage_rate', type: 'number', required: true },
+            { label: 'Monthly Rent', id: 'monthly_rent', type: 'currency', required: true },
+            { label: 'Stamp Duty', id: 'stamp_duty', type: 'currency' },
+            { label: 'Survey Cost', id: 'survey_cost', type: 'currency' },
+            { label: 'Legal Fees', id: 'legal_fees', type: 'currency' },
+            { label: 'Loan Set-up', id: 'loan_setup', type: 'currency' },
+            { label: 'Council Tax (Annual)', id: 'council_tax', type: 'currency' },
+            { label: 'Repairs / Maintenance (Annual)', id: 'repairs_maintenance', type: 'currency' },
+            { label: 'Utilities (Annual)', id: 'utilities', type: 'currency' },
+            { label: 'Water (Annual)', id: 'water', type: 'currency' },
+            { label: 'Broadband / TV (Annual)', id: 'broadband_tv', type: 'currency' },
+            { label: 'Insurance (Annual)', id: 'insurance', type: 'currency' }
+        ]
+    }
+};
+
+function initializeCalculatorSelection() {
+    const calculatorOptions = document.querySelectorAll('.calculator-option');
+    const checkboxes = document.querySelectorAll('.calculator-checkbox input[type="checkbox"]');
+    
+    // Handle checkbox clicks
+    checkboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', (e) => {
+            e.stopPropagation(); // Prevent option click
+            updateCalculatorSelection();
+        });
+    });
+    
+    // Handle option clicks (toggle checkbox)
+    calculatorOptions.forEach(option => {
+        option.addEventListener('click', (e) => {
+            // Don't toggle if clicking directly on checkbox
+            if (e.target.type === 'checkbox') return;
+            
+            const checkbox = option.querySelector('input[type="checkbox"]');
+            if (checkbox) {
+                checkbox.checked = !checkbox.checked;
+                updateCalculatorSelection();
+            }
+        });
+    });
+}
+
+function updateCalculatorSelection() {
+    const checkboxes = document.querySelectorAll('.calculator-checkbox input[type="checkbox"]:checked');
+    const selectedCalculators = Array.from(checkboxes).map(cb => cb.dataset.calculator);
+    const calculatorOptions = document.querySelectorAll('.calculator-option');
+    
+    // Update visual selection
+    calculatorOptions.forEach(option => {
+        const checkbox = option.querySelector('input[type="checkbox"]');
+        if (checkbox && checkbox.checked) {
+            option.classList.add('selected');
+        } else {
+            option.classList.remove('selected');
+        }
+    });
+    
+    // Show/hide calculator fields
+    showCalculatorFields(selectedCalculators);
+}
+
+function showCalculatorFields(selectedCalculators) {
+    const fieldsContainer = document.getElementById('calculator-fields-list');
+    const calculatorSection = document.getElementById('calculator-fields-container');
+    const standardFields = document.getElementById('standard-fields');
+    const rentalFields = document.getElementById('rental-fields');
+    
+    // Hide old static fields
+    if (standardFields) standardFields.style.display = 'none';
+    if (rentalFields) rentalFields.style.display = 'none';
+    
+    // Clear container
+    fieldsContainer.innerHTML = '';
+    
+    if (selectedCalculators.length === 0) {
+        calculatorSection.style.display = 'none';
+        return;
+    }
+    
+    // Show fields for each selected calculator
+    selectedCalculators.forEach(calculatorType => {
+        const config = calculatorConfigs[calculatorType];
+        if (!config) return;
+        
+        // Create section for this calculator
+        const section = document.createElement('div');
+        section.className = 'calculator-fields-section';
+        section.dataset.calculator = calculatorType;
+        
+        const title = document.createElement('h3');
+        title.textContent = config.title;
+        section.appendChild(title);
+        
+        const fieldsGrid = document.createElement('div');
+        fieldsGrid.className = 'form-grid';
+        
+        config.fields.forEach(field => {
+            // Create unique ID for this calculator's field
+            const uniqueId = `${calculatorType}_${field.id}`;
+            
+            const label = document.createElement('label');
+            label.textContent = field.label + (field.required ? ' *' : '');
+            label.setAttribute('for', uniqueId);
+            
+            let input;
+            if (field.type === 'currency') {
+                input = document.createElement('input');
+                input.type = 'text';
+                input.id = uniqueId;
+                input.dataset.originalId = field.id;
+                input.dataset.calculator = calculatorType;
+                input.placeholder = 'e.g., £1,000';
+                input.pattern = '[£0-9,.]*';
+            } else if (field.type === 'number') {
+                input = document.createElement('input');
+                input.type = 'number';
+                input.id = uniqueId;
+                input.dataset.originalId = field.id;
+                input.dataset.calculator = calculatorType;
+                input.step = '0.01';
+                input.placeholder = 'e.g., 20';
+            } else {
+                input = document.createElement('input');
+                input.type = 'text';
+                input.id = uniqueId;
+                input.dataset.originalId = field.id;
+                input.dataset.calculator = calculatorType;
+            }
+            
+            if (field.required) {
+                input.required = true;
+            }
+            
+            fieldsGrid.appendChild(label);
+            fieldsGrid.appendChild(input);
+        });
+        
+        section.appendChild(fieldsGrid);
+        fieldsContainer.appendChild(section);
+        
+        // Populate with mock data
+        if (window.mockDataStore) {
+            const calculatorOverrides = {
+                'holiday-let': {
+                    'occupancy_rate': '65',
+                    'management_fee': '20'
+                },
+                'rent-to-hmo': {
+                    'occupancy_rate': '80',
+                    'management_fee': ''
+                },
+                'rent-to-serviced': {
+                    'occupancy_rate': '60',
+                    'management_fee': '18'
+                }
+            };
+            
+            const overrides = calculatorOverrides[calculatorType] || {};
+            
+            config.fields.forEach(field => {
+                const uniqueId = `${calculatorType}_${field.id}`;
+                const input = document.getElementById(uniqueId);
+                if (input) {
+                    const value = overrides[field.id] !== undefined 
+                        ? overrides[field.id] 
+                        : window.mockDataStore[field.id];
+                    
+                    if (value) {
+                        input.value = value;
+                    }
+                }
+            });
+        }
+    });
+    
+    // Show calculator fields section
+    calculatorSection.style.display = 'block';
+}
+
+// Initialize calculator selection on page load
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeCalculatorSelection);
+} else {
+    initializeCalculatorSelection();
 }
 
 // Make functions available globally for onclick handlers
