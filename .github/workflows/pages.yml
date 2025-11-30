@@ -30,7 +30,6 @@ jobs:
           cp index.html public/
           cp styles.css public/ || true
           cp renderer.js public/
-          cp pdf-generator.js public/
           cp logo.png public/ || true
           # Optional example images
           if [ -d sample_images ]; then
