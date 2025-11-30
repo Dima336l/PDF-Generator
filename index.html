@@ -70,6 +70,83 @@
             <!-- Investment Tab -->
             <div id="investment-tab" class="tab-content">
                 <div class="section">
+                    <h2>Calculator Selection</h2>
+                    <p class="section-description">Select one or more investment calculators to use (you can select multiple):</p>
+                    <div class="calculator-grid" id="calculator-selection">
+                        <div class="calculator-option" data-calculator="standard-btl">
+                            <div class="calculator-checkbox">
+                                <input type="checkbox" id="calc-standard-btl" data-calculator="standard-btl">
+                                <label for="calc-standard-btl"></label>
+                            </div>
+                            <div class="calculator-icon">🏠</div>
+                            <div class="calculator-title">Standard Buy to Let</div>
+                            <div class="calculator-desc">For properties you intend to buy ready to rent out</div>
+                        </div>
+                        <div class="calculator-option" data-calculator="brr">
+                            <div class="calculator-checkbox">
+                                <input type="checkbox" id="calc-brr" data-calculator="brr">
+                                <label for="calc-brr"></label>
+                            </div>
+                            <div class="calculator-icon">🔧</div>
+                            <div class="calculator-title">Buy Refurbish Refinance</div>
+                            <div class="calculator-desc">For properties you intend to refurb, pull money out and rent out</div>
+                        </div>
+                        <div class="calculator-option" data-calculator="flip">
+                            <div class="calculator-checkbox">
+                                <input type="checkbox" id="calc-flip" data-calculator="flip">
+                                <label for="calc-flip"></label>
+                            </div>
+                            <div class="calculator-icon">🔄</div>
+                            <div class="calculator-title">Flip</div>
+                            <div class="calculator-desc">For properties you intend to refurb and sell at a profit</div>
+                        </div>
+                        <div class="calculator-option" data-calculator="holiday-let">
+                            <div class="calculator-checkbox">
+                                <input type="checkbox" id="calc-holiday-let" data-calculator="holiday-let">
+                                <label for="calc-holiday-let"></label>
+                            </div>
+                            <div class="calculator-icon">🏖️</div>
+                            <div class="calculator-title">Holiday Let</div>
+                            <div class="calculator-desc">For properties you intend to buy and let out on a short term basis</div>
+                        </div>
+                        <div class="calculator-option" data-calculator="rent-to-hmo">
+                            <div class="calculator-checkbox">
+                                <input type="checkbox" id="calc-rent-to-hmo" data-calculator="rent-to-hmo">
+                                <label for="calc-rent-to-hmo"></label>
+                            </div>
+                            <div class="calculator-icon">👥</div>
+                            <div class="calculator-title">Rent to HMO</div>
+                            <div class="calculator-desc">For properties you intend to rent and let out to multiple people</div>
+                        </div>
+                        <div class="calculator-option" data-calculator="rent-to-serviced">
+                            <div class="calculator-checkbox">
+                                <input type="checkbox" id="calc-rent-to-serviced" data-calculator="rent-to-serviced">
+                                <label for="calc-rent-to-serviced"></label>
+                            </div>
+                            <div class="calculator-icon">🧳</div>
+                            <div class="calculator-title">Rent to Serviced Accommodation</div>
+                            <div class="calculator-desc">For properties you intend to rent and let out on a short term basis</div>
+                        </div>
+                        <div class="calculator-option" data-calculator="purchase">
+                            <div class="calculator-checkbox">
+                                <input type="checkbox" id="calc-purchase" data-calculator="purchase">
+                                <label for="calc-purchase"></label>
+                            </div>
+                            <div class="calculator-icon">📊</div>
+                            <div class="calculator-title">Purchase</div>
+                            <div class="calculator-desc">Full calculator with all options for purchasing a property</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="calculator-fields-container" class="section" style="display: none;">
+                    <h2>Calculator Fields</h2>
+                    <div id="calculator-fields-list">
+                        <!-- Dynamic calculator fields will be inserted here -->
+                    </div>
+                </div>
+                
+                <div class="section" id="standard-fields" style="display: none;">
                     <h2>Purchase Information</h2>
                     <div class="form-grid">
                         <label>Purchase Price:</label>
@@ -94,7 +171,7 @@
                         <input type="text" id="loan_setup" placeholder="e.g., £1,000">
                     </div>
                 </div>
-                <div class="section">
+                <div class="section" id="rental-fields" style="display: none;">
                     <h2>Rental Information</h2>
                     <div class="form-grid">
                         <label>Monthly Rent:</label>
@@ -287,6 +364,7 @@
         </div>
     </div>
 
+    <script src="calculator-logic.js"></script>
     <script src="renderer.js"></script>
 </body>
 </html>

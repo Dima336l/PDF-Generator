@@ -2,6 +2,20 @@ const PDFDocument = require('pdfkit');
 const fs = require('fs');
 const path = require('path');
 
+// Import calculator logic
+let calculateInvestment, parseCurrencyCalc, formatCurrencyCalc;
+try {
+    const calcLogic = require('./calculator-logic');
+    calculateInvestment = calcLogic.calculateInvestment;
+    parseCurrencyCalc = calcLogic.parseCurrency;
+    formatCurrencyCalc = calcLogic.formatCurrency;
+} catch (e) {
+    console.warn('Calculator logic not found, using fallback functions:', e.message);
+    parseCurrencyCalc = parseCurrency;
+    formatCurrencyCalc = formatCurrency;
+    calculateInvestment = null;
+}
+
 // Constants
 const A4_WIDTH = 595.28; // A4 width in points
 const A4_HEIGHT = 841.89; // A4 height in points
@@ -216,55 +230,142 @@ function createCoverPage(doc, data, images, logoPath) {
        });
 }
 
-// Create investment opportunity page
-function createInvestmentPage(doc, data, logoPath) {
-    // Draw header
-    drawHeader(doc, logoPath);
+// Helper function to calculate values for a single calculator
+function calculateCalculatorValues(calculatorType, calcData, allData) {
+    console.log(`calculateCalculatorValues - calculatorType: ${calculatorType}`);
+    console.log(`calculateCalculatorValues - calcData keys:`, Object.keys(calcData));
+    console.log(`calculateCalculatorValues - calculateInvestment available:`, !!calculateInvestment);
+    
+    let purchasePrice, depositAmount, mortgageAmount, totalInvestment, annualRent, monthlyRent, rentalYield, totalAnnualExpenses, annualProfit, monthlyProfit, roi;
+    let depositPercent, mortgageRate, stampDuty, surveyCost, legalFees, loanSetup, annualMortgageInterest, councilTax, repairs, utilities, water, broadband, insurance;
+    
+    // Try to use calculator logic
+    if (calculateInvestment) {
+        const dataForCalc = { ...allData, ...calcData };
+        dataForCalc.calculator_type = calculatorType;
+        
+        console.log(`calculateCalculatorValues - calling calculateInvestment with type: ${calculatorType}`);
+        
+        try {
+            const calcResults = calculateInvestment(dataForCalc);
+            console.log(`calculateCalculatorValues - calcResults:`, {
+                purchasePrice: calcResults.purchasePrice,
+                monthlyRent: calcResults.monthlyRent,
+                annualProfit: calcResults.annualProfit,
+                roi: calcResults.roi
+            });
+            
+            // Extract results (works for all calculator types)
+            purchasePrice = calcResults.purchasePrice || 0;
+            depositAmount = calcResults.depositAmount || 0;
+            mortgageAmount = calcResults.mortgageAmount || 0;
+            totalInvestment = calcResults.totalInvestment || calcResults.netInvestment || 0;
+            annualRent = calcResults.annualRent || calcResults.annualIncome || 0;
+            monthlyRent = calcResults.monthlyRent || calcResults.monthlyIncome || 0;
+            rentalYield = calcResults.rentalYield || 0;
+            totalAnnualExpenses = calcResults.totalAnnualExpenses || 0;
+            annualProfit = calcResults.annualProfit || calcResults.netProfit || 0;
+            monthlyProfit = calcResults.monthlyProfit || 0;
+            roi = calcResults.roi || 0;
+            
+            // Extract additional values for display
+            depositPercent = parseFloat(calcData.deposit_percent || allData.deposit_percent) || 20;
+            mortgageRate = parseFloat(calcData.mortgage_rate || allData.mortgage_rate) || 5.8;
+            stampDuty = calcResults.stampDuty || parseCurrency(calcData.stamp_duty || allData.stamp_duty);
+            surveyCost = calcResults.surveyCost || parseCurrency(calcData.survey_cost || allData.survey_cost);
+            legalFees = calcResults.legalFees || parseCurrency(calcData.legal_fees || allData.legal_fees);
+            loanSetup = calcResults.loanSetup || parseCurrency(calcData.loan_setup || allData.loan_setup);
+            annualMortgageInterest = calcResults.annualMortgageInterest || 0;
+            councilTax = calcResults.councilTax || parseCurrency(calcData.council_tax || allData.council_tax);
+            repairs = calcResults.repairs || parseCurrency(calcData.repairs_maintenance || allData.repairs_maintenance);
+            utilities = calcResults.utilities || parseCurrency(calcData.utilities || allData.utilities);
+            water = calcResults.water || parseCurrency(calcData.water || allData.water);
+            broadband = calcResults.broadband || parseCurrency(calcData.broadband_tv || allData.broadband_tv);
+            insurance = calcResults.insurance || parseCurrency(calcData.insurance || allData.insurance);
+            
+            return { purchasePrice, depositAmount, mortgageAmount, totalInvestment, annualRent, monthlyRent, rentalYield, 
+                     totalAnnualExpenses, annualProfit, monthlyProfit, roi, depositPercent, mortgageRate, 
+                     stampDuty, surveyCost, legalFees, loanSetup, annualMortgageInterest, councilTax, repairs, 
+                     utilities, water, broadband, insurance };
+        } catch (err) {
+            console.warn('Error using calculator logic, falling back:', err);
+            console.error('Error details:', err.stack);
+        }
+    } else {
+        console.warn('calculateInvestment function not available, using fallback calculation');
+    }
+    
+    // Fallback to hardcoded calculation if calculator logic failed or not available
+    console.log('Using fallback calculation for', calculatorType);
+    purchasePrice = parseCurrency(calcData.purchase_price || allData.purchase_price);
+    depositPercent = parseFloat(calcData.deposit_percent || allData.deposit_percent) || 20;
+    monthlyRent = parseCurrency(calcData.monthly_rent || allData.monthly_rent);
+    mortgageRate = parseFloat(calcData.mortgage_rate || allData.mortgage_rate) || 5.8;
 
-    // Calculate content Y position (below header)
-    const estimatedLogoHeight = (1.4 * INCH) * 0.4;
-    const contentY = HEADER_TOP_OFFSET + estimatedLogoHeight + 12 + 9 + 20;
-    let currentY = contentY;
+    depositAmount = purchasePrice * (depositPercent / 100);
+    annualRent = monthlyRent * 12;
+    rentalYield = purchasePrice > 0 ? (annualRent / purchasePrice) * 100 : 0;
 
-    // Section title
+    stampDuty = parseCurrency(calcData.stamp_duty || allData.stamp_duty);
+    surveyCost = parseCurrency(calcData.survey_cost || allData.survey_cost);
+    legalFees = parseCurrency(calcData.legal_fees || allData.legal_fees);
+    loanSetup = parseCurrency(calcData.loan_setup || allData.loan_setup);
+
+    const totalPurchaseCosts = stampDuty + surveyCost + legalFees + loanSetup;
+    totalInvestment = depositAmount + totalPurchaseCosts;
+
+    mortgageAmount = purchasePrice - depositAmount;
+    annualMortgageInterest = mortgageAmount * (mortgageRate / 100);
+
+    councilTax = parseCurrency(calcData.council_tax || allData.council_tax);
+    repairs = parseCurrency(calcData.repairs_maintenance || allData.repairs_maintenance);
+    utilities = parseCurrency(calcData.utilities || allData.utilities);
+    water = parseCurrency(calcData.water || allData.water);
+    broadband = parseCurrency(calcData.broadband_tv || allData.broadband_tv);
+    insurance = parseCurrency(calcData.insurance || allData.insurance);
+
+    totalAnnualExpenses = annualMortgageInterest + councilTax + repairs + utilities + water + broadband + insurance;
+    annualProfit = annualRent - totalAnnualExpenses;
+    monthlyProfit = annualProfit / 12;
+    roi = totalInvestment > 0 ? (annualProfit / totalInvestment) * 100 : 0;
+    
+    return { purchasePrice, depositAmount, mortgageAmount, totalInvestment, annualRent, monthlyRent, rentalYield, 
+             totalAnnualExpenses, annualProfit, monthlyProfit, roi, depositPercent, mortgageRate, 
+             stampDuty, surveyCost, legalFees, loanSetup, annualMortgageInterest, councilTax, repairs, 
+             utilities, water, broadband, insurance };
+}
+
+// Helper function to render a single calculator section
+function renderCalculatorSection(doc, calculatorType, values, startY) {
+    // Map calculator type to display name
+    const calculatorDisplayNames = {
+        'standard-btl': 'Standard Buy to Let',
+        'brr': 'Buy Refurbish Refinance',
+        'flip': 'Flip',
+        'holiday-let': 'Holiday Let',
+        'rent-to-hmo': 'Rent to HMO',
+        'rent-to-serviced': 'Rent to Serviced Accommodation',
+        'purchase': 'Purchase Calculator'
+    };
+    const calculatorDisplayName = calculatorDisplayNames[calculatorType] || 'Standard Buy to Let';
+    
+    let currentY = startY;
+    
+    // Section title with calculator type
     doc.fontSize(24)
        .font('Helvetica-Bold')
        .fillColor('#000000')
        .text('Investment Opportunity', MARGIN, currentY);
-    currentY += 30;
-
-    // Calculate metrics
-    const purchasePrice = parseCurrency(data.purchase_price);
-    const depositPercent = parseFloat(data.deposit_percent) || 20;
-    const monthlyRent = parseCurrency(data.monthly_rent);
-    const mortgageRate = parseFloat(data.mortgage_rate) || 5.8;
-
-    const depositAmount = purchasePrice * (depositPercent / 100);
-    const annualRent = monthlyRent * 12;
-    const rentalYield = purchasePrice > 0 ? (annualRent / purchasePrice) * 100 : 0;
-
-    const stampDuty = parseCurrency(data.stamp_duty);
-    const surveyCost = parseCurrency(data.survey_cost);
-    const legalFees = parseCurrency(data.legal_fees);
-    const loanSetup = parseCurrency(data.loan_setup);
-
-    const totalPurchaseCosts = stampDuty + surveyCost + legalFees + loanSetup;
-    const totalInvestment = depositAmount + totalPurchaseCosts;
-
-    const mortgageAmount = purchasePrice - depositAmount;
-    const annualMortgageInterest = mortgageAmount * (mortgageRate / 100);
-
-    const councilTax = parseCurrency(data.council_tax);
-    const repairs = parseCurrency(data.repairs_maintenance);
-    const utilities = parseCurrency(data.utilities);
-    const water = parseCurrency(data.water);
-    const broadband = parseCurrency(data.broadband_tv);
-    const insurance = parseCurrency(data.insurance);
-
-    const totalAnnualExpenses = annualMortgageInterest + councilTax + repairs + utilities + water + broadband + insurance;
-    const annualProfit = annualRent - totalAnnualExpenses;
-    const monthlyProfit = annualProfit / 12;
-    const roi = totalInvestment > 0 ? (annualProfit / totalInvestment) * 100 : 0;
+    // Add spacing for the 24pt font (approximately 28-30 points height)
+    currentY += 32;
+    
+    // Calculator type subtitle
+    doc.fontSize(16)
+       .font('Helvetica')
+       .fillColor('#666666')
+       .text(`${calculatorDisplayName} Calculator`, MARGIN, currentY);
+    // Add spacing for the 16pt font (approximately 18-20 points height)
+    currentY += 22;
 
     // Three key metrics boxes (gold background, horizontal) - fit exactly within content width
     const contentWidth = A4_WIDTH - (2 * MARGIN);
@@ -289,7 +390,7 @@ function createInvestmentPage(doc, data, logoPath) {
     doc.fontSize(24)
        .font('Helvetica-Bold')
        .fillColor('#FFFFFF')
-        .text(formatCurrency(purchasePrice), rowStartX + 12, metricsY + 40, { width: boxWidth - 24, align: 'center' });
+        .text(formatCurrency(values.purchasePrice), rowStartX + 12, metricsY + 40, { width: boxWidth - 24, align: 'center' });
 
     // Box 2: Monthly Rent
     const box2X = rowStartX + boxWidth + boxSpacing;
@@ -303,7 +404,7 @@ function createInvestmentPage(doc, data, logoPath) {
     doc.fontSize(24)
        .font('Helvetica-Bold')
        .fillColor('#FFFFFF')
-       .text(formatCurrency(monthlyRent) + 'pcm', box2X + 12, metricsY + 40, { width: boxWidth - 24, align: 'center' });
+       .text(formatCurrency(values.monthlyRent) + 'pcm', box2X + 12, metricsY + 40, { width: boxWidth - 24, align: 'center' });
 
     // Box 3: Rental Yield
     const box3X = box2X + boxWidth + boxSpacing;
@@ -317,7 +418,7 @@ function createInvestmentPage(doc, data, logoPath) {
     doc.fontSize(24)
        .font('Helvetica-Bold')
        .fillColor('#FFFFFF')
-       .text(`${rentalYield.toFixed(1)}%`, box3X + 12, metricsY + 40, { width: boxWidth - 24, align: 'center' });
+       .text(`${values.rentalYield.toFixed(1)}%`, box3X + 12, metricsY + 40, { width: boxWidth - 24, align: 'center' });
 
     currentY += boxHeight + 25;
 
@@ -350,12 +451,12 @@ function createInvestmentPage(doc, data, logoPath) {
     currentY += 20;
 
     const costs = [
-        [`Deposit (${depositPercent}%)`, formatCurrency(depositAmount)],
-        ['Stamp Duty', formatCurrency(stampDuty)],
-        ['Survey', formatCurrency(surveyCost)],
-        ['Legal Fees', formatCurrency(legalFees)],
-        ['Loan Set-up', formatCurrency(loanSetup)],
-        ['Total Investment Required', formatCurrency(totalInvestment)]
+        [`Deposit (${values.depositPercent}%)`, formatCurrency(values.depositAmount)],
+        ['Stamp Duty', formatCurrency(values.stampDuty)],
+        ['Survey', formatCurrency(values.surveyCost)],
+        ['Legal Fees', formatCurrency(values.legalFees)],
+        ['Loan Set-up', formatCurrency(values.loanSetup)],
+        ['Total Investment Required', formatCurrency(values.totalInvestment)]
     ];
 
     let leftTableY = currentY;
@@ -400,14 +501,14 @@ function createInvestmentPage(doc, data, logoPath) {
     currentY += 20;
 
     const expenses = [
-        [`Mortgage @ ${mortgageRate}% (Interest Only)`, formatCurrency(annualMortgageInterest)],
-        ['Council Tax', formatCurrency(councilTax)],
-        ['Repairs / Maintenance', formatCurrency(repairs)],
-        ['Electric / Gas', formatCurrency(utilities)],
-        ['Water', formatCurrency(water)],
-        ['Broadband / TV', formatCurrency(broadband)],
-        ['Insurance', formatCurrency(insurance)],
-        ['Total', formatCurrency(totalAnnualExpenses)]
+        [`Mortgage @ ${values.mortgageRate}% (Interest Only)`, formatCurrency(values.annualMortgageInterest)],
+        ['Council Tax', formatCurrency(values.councilTax)],
+        ['Repairs / Maintenance', formatCurrency(values.repairs)],
+        ['Electric / Gas', formatCurrency(values.utilities)],
+        ['Water', formatCurrency(values.water)],
+        ['Broadband / TV', formatCurrency(values.broadband)],
+        ['Insurance', formatCurrency(values.insurance)],
+        ['Total', formatCurrency(values.totalAnnualExpenses)]
     ];
 
     let rightTableY = currentY;
@@ -463,9 +564,9 @@ function createInvestmentPage(doc, data, logoPath) {
     let profitY = maxTableHeight + (0.5 * INCH);
 
     const profitData = [
-        ['Monthly Profit', formatCurrency(monthlyProfit)],
-        ['Annual Profit', formatCurrency(annualProfit)],
-        ['ROI', `${roi.toFixed(1)}%`]
+        ['Monthly Profit', formatCurrency(values.monthlyProfit)],
+        ['Annual Profit', formatCurrency(values.annualProfit)],
+        ['ROI', `${values.roi.toFixed(1)}%`]
     ];
 
     profitData.forEach(([label, value]) => {
@@ -493,6 +594,65 @@ function createInvestmentPage(doc, data, logoPath) {
            });
         
         profitY += profitBoxHeight + 10;
+    });
+    
+    return profitY; // Return the final Y position
+}
+
+// Create investment opportunity page
+function createInvestmentPage(doc, data, logoPath) {
+    // Get selected calculators
+    let selectedCalculators = data.selected_calculators || (data.calculator_type ? [data.calculator_type] : ['standard-btl']);
+    
+    // Debug logging
+    console.log('createInvestmentPage - data.selected_calculators:', data.selected_calculators);
+    console.log('createInvestmentPage - data.calculator_type:', data.calculator_type);
+    console.log('createInvestmentPage - initial selectedCalculators:', selectedCalculators);
+    
+    // If no calculators selected, default to standard-btl
+    if (!selectedCalculators || selectedCalculators.length === 0) {
+        selectedCalculators = ['standard-btl'];
+    }
+    
+    // Ensure selectedCalculators is an array
+    if (typeof selectedCalculators === 'string') {
+        selectedCalculators = selectedCalculators.split(',').map(s => s.trim()).filter(s => s);
+    }
+    
+    // Ensure it's actually an array
+    if (!Array.isArray(selectedCalculators)) {
+        console.warn('selectedCalculators is not an array, converting:', selectedCalculators);
+        selectedCalculators = [selectedCalculators];
+    }
+    
+    console.log('createInvestmentPage - final selectedCalculators:', selectedCalculators);
+    console.log('createInvestmentPage - number of calculators:', selectedCalculators.length);
+    
+    // Loop through all selected calculators and create a section for each
+    selectedCalculators.forEach((calculatorType, index) => {
+        console.log(`Creating calculator section ${index + 1}/${selectedCalculators.length}: ${calculatorType}`);
+        
+        // Draw header for each calculator section
+        if (index > 0) {
+            // Add a new page for each additional calculator
+            console.log(`Adding new page for calculator ${index + 1}`);
+            doc.addPage();
+        }
+        drawHeader(doc, logoPath);
+
+        // Calculate content Y position (below header)
+        const estimatedLogoHeight = (1.4 * INCH) * 0.4;
+        const contentY = HEADER_TOP_OFFSET + estimatedLogoHeight + 12 + 9 + 20;
+        
+        // Get calculator-specific data
+        const calcData = data[`calculator_${calculatorType}`] || {};
+        console.log(`Calculator data for ${calculatorType}:`, Object.keys(calcData).length, 'fields');
+        
+        // Calculate values for this calculator
+        const values = calculateCalculatorValues(calculatorType, calcData, data);
+        
+        // Render the calculator section
+        renderCalculatorSection(doc, calculatorType, values, contentY);
     });
 }
 
@@ -859,8 +1019,8 @@ function createOtherKeyInformationPage(doc, data, images, logoPath) {
        .text(data.upload_speed || 'N/A', col3X, currentY + 15);
 }
 
-// Create Getting To The City Centre page
-function createCityCentrePage(doc, data, images, logoPath) {
+// Create City Map page
+function createCityMapPage(doc, data, images, logoPath) {
     drawHeader(doc, logoPath);
     
     // Calculate content Y position (below header)
@@ -870,10 +1030,10 @@ function createCityCentrePage(doc, data, images, logoPath) {
     doc.fontSize(24)
        .font('Helvetica-Bold')
        .fillColor('#000000')
-       .text('Getting To The City Centre', MARGIN, currentY);
+       .text('City Map', MARGIN, currentY);
     currentY += 30;
-
-    // Directions image - full width (7 inches), target max height ~2.6 inches (match original)
+ 
+    // Directions image - full width (match city images container width)
     const directionsImages = images.directions || [];
     let directionsPath = directionsImages[0] || null;
     
@@ -896,15 +1056,40 @@ function createCityCentrePage(doc, data, images, logoPath) {
         }
     }
     
-    // Display directions image with proper aspect ratio
-    const directionsImgWidth = 7 * INCH;
-    const directionsImgMaxHeight = 2.6 * INCH; // close to original reference height
+    // Display city map image - match width of the 3 city images container below
+    // City images container: 3 images at 2.3 inches each + spacing = A4_WIDTH - (2 * MARGIN)
+    // Map is always 1280x768 pixels (aspect ratio 1.6667:1)
+    const cityImagesContainerWidth = A4_WIDTH - (2 * MARGIN); // Same as city images container
+    const directionsImgWidth = cityImagesContainerWidth; // Width in points
+    const mapAspectRatio = 1280 / 768; // Known aspect ratio of composite map
+    const directionsImgHeight = directionsImgWidth / mapAspectRatio; // Calculate height from aspect ratio
     
-    // Add image centered within the box while preserving aspect ratio
-    addImageToPDF(doc, directionsPath, MARGIN, currentY, directionsImgWidth, directionsImgMaxHeight, 'contain');
+    // Use explicit width and height to ensure proper scaling
+    // This ensures the map uses the full width and displays at the correct size
+    try {
+        if (directionsPath && fs.existsSync(directionsPath)) {
+            doc.image(directionsPath, MARGIN, currentY, {
+                width: directionsImgWidth,
+                height: directionsImgHeight,
+                align: 'center',
+                valign: 'top'
+            });
+        } else {
+            // Draw placeholder if image doesn't exist
+            doc.rect(MARGIN, currentY, directionsImgWidth, directionsImgHeight)
+               .fillColor('#CCCCCC')
+               .fill();
+        }
+    } catch (error) {
+        console.error('Error adding map image:', error);
+        // Draw placeholder on error
+        doc.rect(MARGIN, currentY, directionsImgWidth, directionsImgHeight)
+           .fillColor('#CCCCCC')
+           .fill();
+    }
     
-    // Advance by the allocated max height to avoid overlap
-    currentY += directionsImgMaxHeight + 20;
+    // Advance by the actual image height to avoid overlap
+    currentY += directionsImgHeight + 20;
 
     // About the City section (always render, like original)
     doc.fontSize(14)
@@ -1120,8 +1305,8 @@ function generatePDF(data, images, outputPath, logoPath) {
             }
             doc.addPage();
 
-            // Getting To The City Centre page
-            createCityCentrePage(doc, data, images, logoPath);
+            // City Map page
+            createCityMapPage(doc, data, images, logoPath);
 
             doc.end();
 
