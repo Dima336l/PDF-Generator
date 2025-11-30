@@ -232,10 +232,9 @@ body {
 }
 
 #calculator-fields-list {
-    display: grid;
-    grid-template-columns: 200px 1fr;
-    gap: 16px;
-    align-items: start;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
 }
 
 #calculator-fields-list label {
@@ -267,6 +266,23 @@ body {
 }
 
 .calculator-section-fields h3 {
+    font-size: 18px;
+    font-weight: 600;
+    color: #111827;
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid #e5e7eb;
+}
+
+.calculator-fields-section {
+    background-color: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 24px;
+    margin-bottom: 24px;
+}
+
+.calculator-fields-section h3 {
     font-size: 18px;
     font-weight: 600;
     color: #111827;
@@ -440,6 +456,10 @@ body {
     }
     
     #calculator-fields-list {
-        grid-template-columns: 1fr;
+        gap: 16px;
+    }
+    
+    .calculator-fields-section {
+        padding: 16px;
     }
 }

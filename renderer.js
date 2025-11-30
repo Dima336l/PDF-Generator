@@ -1752,6 +1752,12 @@ function showCalculatorFields(selectedCalculators) {
                 'rent-to-serviced': {
                     'occupancy_rate': '60',
                     'management_fee': '18'
+                },
+                'flip': {
+                    // Flip-specific overrides if needed
+                },
+                'brr': {
+                    // BRR-specific overrides if needed
                 }
             };
             
@@ -1761,11 +1767,16 @@ function showCalculatorFields(selectedCalculators) {
                 const uniqueId = `${calculatorType}_${field.id}`;
                 const input = document.getElementById(uniqueId);
                 if (input) {
-                    const value = overrides[field.id] !== undefined 
-                        ? overrides[field.id] 
-                        : window.mockDataStore[field.id];
+                    // First check calculator-specific overrides
+                    let value = overrides[field.id];
                     
-                    if (value) {
+                    // If no override, get from mock data store
+                    if (value === undefined || value === '') {
+                        value = window.mockDataStore[field.id];
+                    }
+                    
+                    // Set the value if it exists
+                    if (value !== undefined && value !== null && value !== '') {
                         input.value = value;
                     }
                 }
