@@ -1826,7 +1826,7 @@ function createBRRCalculator(calculatorType) {
                     </div>
                     <div class="pe-field pe-field-detailed pe-field-mortgage" style="display: none;">
                         <label class="pe-field-label">Mortgage Payments / pcm</label>
-                        <input type="text" class="pe-input" id="${calculatorType}_mortgage_payments_initial" value="£ 0" readonly>
+                        <input type="text" class="pe-input" id="${calculatorType}_mortgage_payments_detailed" value="£ 0" readonly>
                     </div>
                     <div class="pe-field pe-field-detailed pe-field-mortgage" style="display: none;">
                         <label class="pe-field-label">Mortgage Interest Rate (APR)</label>
@@ -1907,12 +1907,47 @@ function createBRRCalculator(calculatorType) {
                 <div class="pe-section">
                     <h3 class="pe-section-title">Refinance</h3>
                     <div class="pe-field">
-                        <label class="pe-field-label">Estimated Market Value</label>
-                        <input type="text" class="pe-input" id="${calculatorType}_estimated_market_value" data-original-id="estimated_market_value" data-calculator="${calculatorType}" value="£ 0">
+                        <label class="pe-field-label required">Estimated Market Value</label>
+                        <input type="text" class="pe-input" id="${calculatorType}_estimated_market_value" data-original-id="estimated_market_value" data-calculator="${calculatorType}" placeholder="Required">
+                    </div>
+                    <div class="pe-field">
+                        <label class="pe-field-label">Mortgage Set-up Fee</label>
+                        <div class="pe-field-with-action">
+                            <input type="text" class="pe-input" id="${calculatorType}_refinance_setup_fee" data-original-id="refinance_setup_fee" data-calculator="${calculatorType}" value="£ 0">
+                            <div class="pe-toggle-group">
+                                <button type="button" class="pe-toggle-small pe-toggle-small-active" data-fee-type="currency" data-fee-for="refinance" data-calculator="${calculatorType}">£</button>
+                                <button type="button" class="pe-toggle-small" data-fee-type="percent" data-fee-for="refinance" data-calculator="${calculatorType}">%</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="pe-field">
+                        <label class="pe-field-label">Mortgage Loan to Value</label>
+                        <input type="text" class="pe-input" id="${calculatorType}_refinance_ltv" data-original-id="refinance_ltv" data-calculator="${calculatorType}" value="75 %">
+                    </div>
+                    <div class="pe-field pe-field-inline">
+                        <label class="pe-field-label">Mortgage Type</label>
+                        <div class="pe-financing-type-group">
+                            <button type="button" class="pe-financing-type pe-financing-type-active" data-refinance-mortgage-type="interest_only" data-calculator="${calculatorType}">
+                                <span class="pe-financing-check">✓</span>
+                                <span>Interest Only</span>
+                            </button>
+                            <button type="button" class="pe-financing-type" data-refinance-mortgage-type="repayment" data-calculator="${calculatorType}">
+                                <span class="pe-financing-check">✓</span>
+                                <span>Repayment</span>
+                            </button>
+                        </div>
                     </div>
                     <div class="pe-field">
                         <label class="pe-field-label">Mortgage Payments / pcm</label>
                         <input type="text" class="pe-input" id="${calculatorType}_refinance_mortgage_payments" value="£ 0" readonly>
+                    </div>
+                    <div class="pe-field">
+                        <label class="pe-field-label">Mortgage Interest Rate (APR)</label>
+                        <input type="text" class="pe-input" id="${calculatorType}_refinance_interest_rate" data-original-id="refinance_interest_rate" data-calculator="${calculatorType}" value="5.5 %">
+                    </div>
+                    <div class="pe-field pe-field-refinance-repayment" style="display: none;">
+                        <label class="pe-field-label">Mortgage Term (Years)</label>
+                        <input type="text" class="pe-input" id="${calculatorType}_refinance_mortgage_term_years" data-original-id="refinance_mortgage_term_years" data-calculator="${calculatorType}" value="25">
                     </div>
                     <div class="pe-field">
                         <label class="pe-field-label">Locked In Equity</label>
@@ -1928,31 +1963,6 @@ function createBRRCalculator(calculatorType) {
                     </div>
                     <div id="${calculatorType}_additional_refinance_costs"></div>
                     <a href="#" class="pe-link-add" id="${calculatorType}_add_refinance_cost">+ Add additional refinance cost</a>
-                    <div class="pe-field pe-field-detailed" style="display: none;">
-                        <label class="pe-field-label">Mortgage Set-up Fee</label>
-                        <input type="text" class="pe-input" id="${calculatorType}_refinance_setup_fee" data-original-id="refinance_setup_fee" data-calculator="${calculatorType}" value="£ 0">
-                    </div>
-                    <div class="pe-field pe-field-detailed" style="display: none;">
-                        <label class="pe-field-label">Mortgage Loan to Value</label>
-                        <input type="text" class="pe-input" id="${calculatorType}_refinance_ltv" data-original-id="refinance_ltv" data-calculator="${calculatorType}" value="75 %">
-                    </div>
-                    <div class="pe-field pe-field-detailed pe-field-inline" style="display: none;">
-                        <label class="pe-field-label">Mortgage Type</label>
-                        <div class="pe-financing-type-group">
-                            <button type="button" class="pe-financing-type pe-financing-type-active" data-refinance-mortgage-type="interest_only" data-calculator="${calculatorType}">
-                                <span class="pe-financing-check">✓</span>
-                                <span>Interest Only</span>
-                            </button>
-                            <button type="button" class="pe-financing-type" data-refinance-mortgage-type="repayment" data-calculator="${calculatorType}">
-                                <span class="pe-financing-check">✓</span>
-                                <span>Repayment</span>
-                            </button>
-                        </div>
-                    </div>
-                    <div class="pe-field pe-field-detailed" style="display: none;">
-                        <label class="pe-field-label">Mortgage Interest Rate (APR)</label>
-                        <input type="text" class="pe-input" id="${calculatorType}_refinance_interest_rate" data-original-id="refinance_interest_rate" data-calculator="${calculatorType}" value="5.5 %">
-                    </div>
                 </div>
                 
                 <div class="pe-section">
@@ -2090,6 +2100,9 @@ function createBRRCalculator(calculatorType) {
 }
 
 function setupBRRCalculatorEvents(section, calculatorType) {
+    // Get financing payment field reference (used in multiple places)
+    const financingPaymentField = section.querySelector(`#${calculatorType}_financing_payment_field`);
+    
     // Detailed view toggle
     const detailedViewToggle = section.querySelector(`#${calculatorType}_detailed_view`);
     if (detailedViewToggle) {
@@ -2121,6 +2134,22 @@ function setupBRRCalculatorEvents(section, calculatorType) {
                     field.style.display = 'none';
                 }
             });
+            
+            // Hide the top financing payment field when detailed view is enabled and mortgage is selected
+            if (e.target.checked && financingType === 'mortgage') {
+                if (financingPaymentField) {
+                    financingPaymentField.style.display = 'none';
+                }
+            } else {
+                // Show it again when detailed view is disabled or financing type changes
+                if (financingPaymentField) {
+                    if (financingType === 'cash') {
+                        financingPaymentField.style.display = 'none';
+                    } else {
+                        financingPaymentField.style.display = 'block';
+                    }
+                }
+            }
             // Update label text
             const label = detailedViewToggle.parentElement.querySelector('span');
             if (label) {
@@ -2163,7 +2192,6 @@ function setupBRRCalculatorEvents(section, calculatorType) {
     
     // Financing type buttons (Mortgage/Bridging/Cash - not the mortgage type buttons)
     const financingTypeButtons = section.querySelectorAll('[data-type]');
-    const financingPaymentField = section.querySelector(`#${calculatorType}_financing_payment_field`);
     const financingPaymentLabel = section.querySelector(`#${calculatorType}_financing_payment_label`);
     
     // Initialize field state based on default selected financing type
@@ -2248,6 +2276,23 @@ function setupBRRCalculatorEvents(section, calculatorType) {
                         field.style.display = 'none';
                     }
                 });
+                
+                // Hide the top financing payment field when mortgage is selected in detailed view
+                if (selectedType === 'mortgage') {
+                    if (financingPaymentField) {
+                        financingPaymentField.style.display = 'none';
+                    }
+                } else {
+                    // Show it for bridging or when switching away from mortgage
+                    if (financingPaymentField && selectedType !== 'cash') {
+                        financingPaymentField.style.display = 'block';
+                    }
+                }
+            } else {
+                // Show the top financing payment field when detailed view is disabled
+                if (financingPaymentField && selectedType !== 'cash') {
+                    financingPaymentField.style.display = 'block';
+                }
             }
             
             // Update "Include in Bridging Finance" button state
@@ -2268,7 +2313,7 @@ function setupBRRCalculatorEvents(section, calculatorType) {
     }
     
     // Bridging Set-up Fee toggle (between % and £)
-    const bridgingFeeTypeButtons = section.querySelectorAll('[data-fee-type]:not([data-fee-for="mortgage"])');
+    const bridgingFeeTypeButtons = section.querySelectorAll('[data-fee-type]:not([data-fee-for="mortgage"]):not([data-fee-for="refinance"])');
     bridgingFeeTypeButtons.forEach(btn => {
         btn.addEventListener('click', () => {
             const feeType = btn.dataset.feeType;
@@ -2298,6 +2343,29 @@ function setupBRRCalculatorEvents(section, calculatorType) {
             const setupFeeInput = section.querySelector(`#${calculatorType}_mortgage_setup_fee`);
             
             mortgageFeeTypeButtons.forEach(b => b.classList.remove('pe-toggle-small-active'));
+            btn.classList.add('pe-toggle-small-active');
+            
+            // Update the input value format based on selected type
+            if (setupFeeInput && feeType === 'currency') {
+                const currentValue = setupFeeInput.value.replace(/[£%\s,]/g, '');
+                setupFeeInput.value = `£ ${currentValue}`;
+            } else if (setupFeeInput && feeType === 'percent') {
+                const currentValue = setupFeeInput.value.replace(/[£%\s,]/g, '');
+                setupFeeInput.value = `${currentValue} %`;
+            }
+            
+            calculateBRRValues(calculatorType);
+        });
+    });
+    
+    // Refinance Set-up Fee toggle (between £ and %)
+    const refinanceFeeTypeButtons = section.querySelectorAll('[data-fee-type][data-fee-for="refinance"]');
+    refinanceFeeTypeButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const feeType = btn.dataset.feeType;
+            const setupFeeInput = section.querySelector(`#${calculatorType}_refinance_setup_fee`);
+            
+            refinanceFeeTypeButtons.forEach(b => b.classList.remove('pe-toggle-small-active'));
             btn.classList.add('pe-toggle-small-active');
             
             // Update the input value format based on selected type
@@ -2351,9 +2419,19 @@ function setupBRRCalculatorEvents(section, calculatorType) {
     // Mortgage type buttons (Refinance)
     const refinanceMortgageTypeButtons = section.querySelectorAll('[data-refinance-mortgage-type]');
     refinanceMortgageTypeButtons.forEach(btn => {
-        btn.addEventListener('click', () => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation(); // Prevent event bubbling
             refinanceMortgageTypeButtons.forEach(b => b.classList.remove('pe-financing-type-active'));
             btn.classList.add('pe-financing-type-active');
+            
+            const refinanceMortgageType = btn.dataset.refinanceMortgageType;
+            const refinanceRepaymentFields = section.querySelectorAll('.pe-field-refinance-repayment');
+            
+            // Show/hide Mortgage Term field based on refinance mortgage type
+            refinanceRepaymentFields.forEach(field => {
+                field.style.display = refinanceMortgageType === 'repayment' ? 'block' : 'none';
+            });
+            
             calculateBRRValues(calculatorType);
         });
     });
@@ -2523,6 +2601,17 @@ function setupBRRCalculatorEvents(section, calculatorType) {
             }
         });
     }
+    
+    // Initialize: Hide the top financing payment field if detailed view is checked and mortgage is selected on page load
+    setTimeout(() => {
+        const hiddenInput = section.querySelector(`#${calculatorType}_financing_type_hidden`);
+        const initialFinancingType = hiddenInput?.value || 'bridging';
+        if (detailedViewToggle && detailedViewToggle.checked && initialFinancingType === 'mortgage') {
+            if (financingPaymentField) {
+                financingPaymentField.style.display = 'none';
+            }
+        }
+    }, 50);
     
     // Initial calculation
     setTimeout(() => calculateBRRValues(calculatorType), 100);
