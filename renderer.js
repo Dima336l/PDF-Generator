@@ -301,9 +301,11 @@ function loadMockData() {
         'loan_setup': '£4,640',
         
         // BRR Calculator
-        'refurb_cost': '£25,000',
+        'refurb_cost': '£30,000',
         'after_refurb_value': '£350,000',
         'refinance_ltv': '75',
+        'bridging_interest': '£500',
+        'vacant_period': '3',
         
         // Flip Calculator
         'sale_price': '£320,000',
@@ -1523,7 +1525,6 @@ const calculatorConfigs = {
         fields: [
             { label: 'Purchase Price', id: 'purchase_price', type: 'currency', required: true },
             { label: 'Refurbishment Cost', id: 'refurb_cost', type: 'currency', required: true },
-            { label: 'After Refurb Value', id: 'after_refurb_value', type: 'currency', required: true },
             { label: 'Deposit (%)', id: 'deposit_percent', type: 'number', required: true },
             { label: 'Mortgage Rate (%)', id: 'mortgage_rate', type: 'number', required: true },
             { label: 'Refinance LTV (%)', id: 'refinance_ltv', type: 'number', required: true },
@@ -1659,6 +1660,1381 @@ function updateCalculatorSelection() {
     showCalculatorFields(selectedCalculators);
 }
 
+function createBRRCalculator(calculatorType) {
+    const section = document.createElement('div');
+    section.className = 'calculator-fields-section propertyengine-calculator';
+    section.dataset.calculator = calculatorType;
+    
+    section.innerHTML = `
+        <div class="pe-calculator-topbar">
+            <h2 class="pe-calculator-title">Buy Refurbish Refinance Calculator</h2>
+            <div class="pe-calculator-actions">
+                <label class="pe-switch-label">
+                    <input type="checkbox" class="pe-switch-detailed" id="${calculatorType}_detailed_view">
+                    <span>Switch to detailed view</span>
+                </label>
+                <button class="pe-btn-save">Save Calculator</button>
+                <div class="pe-roi-display">
+                    <div class="pe-roi-label">Return on Investment</div>
+                    <div class="pe-roi-value" id="${calculatorType}_roi">-%</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="pe-calculator-content">
+            <div class="pe-calculator-left">
+                <div class="pe-section">
+                    <h3 class="pe-section-title">Purchase</h3>
+                    <div class="pe-field">
+                        <label class="pe-field-label required">Purchase Price</label>
+                        <input type="text" class="pe-input" id="${calculatorType}_purchase_price" data-original-id="purchase_price" data-calculator="${calculatorType}" placeholder="£ 0">
+                    </div>
+                    <div class="pe-field">
+                        <div class="pe-field-header">
+                            <label class="pe-field-label">Stamp Duty</label>
+                            <button type="button" class="pe-toggle-expand" id="${calculatorType}_stamp_duty_toggle" data-target="${calculatorType}_stamp_duty_content">
+                                <span class="pe-toggle-expand-icon">▼</span>
+                            </button>
+                        </div>
+                        <div class="pe-field">
+                            <input type="text" class="pe-input" id="${calculatorType}_stamp_duty" data-original-id="stamp_duty" data-calculator="${calculatorType}" value="£ 0" readonly>
+                        </div>
+                        <div class="pe-stamp-duty-container" id="${calculatorType}_stamp_duty_content" style="display: none;">
+                            <div class="pe-stamp-duty-section">
+                                <label class="pe-stamp-duty-section-label">Buyer Type</label>
+                                <div class="pe-stamp-duty-options">
+                                    <button type="button" class="pe-option-button" id="${calculatorType}_individual_moving" data-calculator="${calculatorType}">
+                                        <span class="pe-option-check">✓</span>
+                                        <span>Buying as an Individual Moving Home</span>
+                                    </button>
+                                    <button type="button" class="pe-option-button" id="${calculatorType}_first_time_buyer" data-calculator="${calculatorType}" style="display: none;">
+                                        <span class="pe-option-check">✓</span>
+                                        <span>First Time Buyer</span>
+                                    </button>
+                                    <button type="button" class="pe-option-button" id="${calculatorType}_overseas_buyer" data-calculator="${calculatorType}">
+                                        <span class="pe-option-check">✓</span>
+                                        <span>Overseas Buyer</span>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="pe-stamp-duty-section">
+                                <label class="pe-stamp-duty-section-label">Rate Period</label>
+                                <select class="pe-select" id="${calculatorType}_stamp_duty_period" data-calculator="${calculatorType}">
+                                    <option value="current">Current (from 1st April 2025)</option>
+                                    <option value="2024-2025">31st Oct 2024 - 31st Mar 2025</option>
+                                    <option value="2022-2024">23rd Sep 2022 - 31st Oct 2024</option>
+                                    <option value="2021-2022">1st Oct 2021 - 23rd Sep 2022</option>
+                                    <option value="2021-mid">1st Jul 2021 - 30th Sep 2021</option>
+                                    <option value="none">None</option>
+                                </select>
+                            </div>
+                            <div class="pe-stamp-duty-breakdown" id="${calculatorType}_stamp_duty_breakdown" style="display: none;">
+                                <!-- Breakdown will be populated dynamically -->
+                            </div>
+                        </div>
+                    </div>
+                    <div class="pe-field pe-field-detailed" style="display: none;">
+                        <label class="pe-field-label">Survey Costs</label>
+                        <input type="text" class="pe-input" id="${calculatorType}_survey_costs" data-original-id="survey_costs" data-calculator="${calculatorType}" value="£ 500">
+                    </div>
+                    <div class="pe-field pe-field-detailed" style="display: none;">
+                        <label class="pe-field-label">Legal Fees</label>
+                        <input type="text" class="pe-input" id="${calculatorType}_legal_fees" data-original-id="legal_fees" data-calculator="${calculatorType}" value="£ 1,500">
+                    </div>
+                    <div class="pe-field">
+                        <label class="pe-field-label">Total Investment Required</label>
+                        <div class="pe-field-with-action">
+                            <input type="text" class="pe-input" id="${calculatorType}_total_investment" value="£ 0" readonly>
+                            <button class="pe-btn-detail">Detail</button>
+                        </div>
+                    </div>
+                    <a href="#" class="pe-link-add pe-field-detailed" style="display: none;">+ Add additional purchase cost</a>
+                </div>
+                
+                <div class="pe-section">
+                    <h3 class="pe-section-title">Initial Financing</h3>
+                    <div class="pe-field pe-field-inline">
+                        <label class="pe-field-label">Type</label>
+                        <div class="pe-financing-type-group">
+                            <button type="button" class="pe-financing-type" data-type="mortgage" data-calculator="${calculatorType}">
+                                <span class="pe-financing-check">✓</span>
+                                <span>Mortgage</span>
+                            </button>
+                            <button type="button" class="pe-financing-type pe-financing-type-active" data-type="bridging" data-calculator="${calculatorType}">
+                                <span class="pe-financing-check">✓</span>
+                                <span>Bridging Finance</span>
+                            </button>
+                            <button type="button" class="pe-financing-type" data-type="cash" data-calculator="${calculatorType}">
+                                <span class="pe-financing-check">✓</span>
+                                <span>Cash</span>
+                            </button>
+                            <input type="hidden" name="${calculatorType}_financing_type" value="bridging" id="${calculatorType}_financing_type_hidden">
+                        </div>
+                    </div>
+                    <div class="pe-field" id="${calculatorType}_financing_payment_field">
+                        <label class="pe-field-label" id="${calculatorType}_financing_payment_label">Bridging Interest / pcm</label>
+                        <input type="text" class="pe-input" id="${calculatorType}_bridging_interest" data-original-id="bridging_interest" data-calculator="${calculatorType}" value="£ 0">
+                    </div>
+                    <div class="pe-field pe-field-detailed pe-field-bridging" style="display: none;">
+                        <label class="pe-field-label">Bridging Set-up Fee</label>
+                        <div class="pe-field-with-action">
+                            <input type="text" class="pe-input" id="${calculatorType}_bridging_setup_fee" data-original-id="bridging_setup_fee" data-calculator="${calculatorType}" value="1.75 %">
+                            <div class="pe-toggle-group">
+                                <button type="button" class="pe-toggle-small pe-toggle-small-active" data-fee-type="percent" data-calculator="${calculatorType}">%</button>
+                                <button type="button" class="pe-toggle-small" data-fee-type="currency" data-calculator="${calculatorType}">£</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="pe-field pe-field-detailed pe-field-bridging" style="display: none;">
+                        <label class="pe-field-label">Bridging Loan to Value</label>
+                        <input type="text" class="pe-input" id="${calculatorType}_bridging_ltv" data-original-id="bridging_ltv" data-calculator="${calculatorType}" value="75 %">
+                    </div>
+                    <div class="pe-field pe-field-detailed pe-field-bridging" style="display: none;">
+                        <label class="pe-field-label">Interest Rate (monthly)</label>
+                        <input type="text" class="pe-input" id="${calculatorType}_bridging_interest_rate_monthly" data-original-id="bridging_interest_rate_monthly" data-calculator="${calculatorType}" value="1 %">
+                    </div>
+                    <div class="pe-field pe-field-detailed pe-field-bridging" style="display: none;">
+                        <label class="pe-field-label">Finance Required</label>
+                        <input type="text" class="pe-input" id="${calculatorType}_bridging_finance_required" value="£ 0" readonly>
+                    </div>
+                    <div class="pe-field pe-field-detailed pe-field-mortgage" style="display: none;">
+                        <label class="pe-field-label">Mortgage Set-up Fee</label>
+                        <div class="pe-field-with-action">
+                            <input type="text" class="pe-input" id="${calculatorType}_mortgage_setup_fee" data-original-id="mortgage_setup_fee" data-calculator="${calculatorType}" value="£ 1,000">
+                            <div class="pe-toggle-group">
+                                <button type="button" class="pe-toggle-small pe-toggle-small-active" data-fee-type="currency" data-fee-for="mortgage" data-calculator="${calculatorType}">£</button>
+                                <button type="button" class="pe-toggle-small" data-fee-type="percent" data-fee-for="mortgage" data-calculator="${calculatorType}">%</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="pe-field pe-field-detailed" style="display: none;">
+                        <label class="pe-field-label">Mortgage Loan to Value</label>
+                        <input type="text" class="pe-input" id="${calculatorType}_mortgage_ltv" data-original-id="mortgage_ltv" data-calculator="${calculatorType}" value="75 %">
+                    </div>
+                    <div class="pe-field pe-field-detailed pe-field-mortgage pe-field-inline" style="display: none;">
+                        <label class="pe-field-label">Mortgage Type</label>
+                        <div class="pe-financing-type-group">
+                            <button type="button" class="pe-financing-type pe-financing-type-active" data-mortgage-type="interest_only" data-calculator="${calculatorType}">
+                                <span class="pe-financing-check">✓</span>
+                                <span>Interest Only</span>
+                            </button>
+                            <button type="button" class="pe-financing-type" data-mortgage-type="repayment" data-calculator="${calculatorType}">
+                                <span class="pe-financing-check">✓</span>
+                                <span>Repayment</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="pe-field pe-field-detailed pe-field-mortgage" style="display: none;">
+                        <label class="pe-field-label">Mortgage Payments / pcm</label>
+                        <input type="text" class="pe-input" id="${calculatorType}_mortgage_payments_initial" value="£ 0" readonly>
+                    </div>
+                    <div class="pe-field pe-field-detailed pe-field-mortgage" style="display: none;">
+                        <label class="pe-field-label">Mortgage Interest Rate (APR)</label>
+                        <input type="text" class="pe-input" id="${calculatorType}_mortgage_interest_rate" data-original-id="mortgage_interest_rate" data-calculator="${calculatorType}" value="5.5 %">
+                    </div>
+                    <div class="pe-field pe-field-detailed pe-field-mortgage pe-field-repayment" style="display: none;">
+                        <label class="pe-field-label">Mortgage Term (Years)</label>
+                        <input type="text" class="pe-input" id="${calculatorType}_mortgage_term_years" data-original-id="mortgage_term_years" data-calculator="${calculatorType}" value="25">
+                    </div>
+                    <div class="pe-field pe-field-detailed pe-field-mortgage" style="display: none;">
+                        <label class="pe-field-label">Mortgage Required</label>
+                        <input type="text" class="pe-input" id="${calculatorType}_mortgage_required" value="£ 0" readonly>
+                    </div>
+                </div>
+                
+                <div class="pe-section">
+                    <div class="pe-section-header">
+                        <h3 class="pe-section-title">Refurb</h3>
+                        <label class="pe-toggle">
+                            <input type="checkbox" class="pe-toggle-input" id="${calculatorType}_refurb_enabled" checked>
+                            <span class="pe-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="pe-section-content" id="${calculatorType}_refurb_content">
+                        <div class="pe-field">
+                            <label class="pe-field-label">Refurb Cost</label>
+                            <input type="text" class="pe-input" id="${calculatorType}_refurb_cost" data-original-id="refurb_cost" data-calculator="${calculatorType}" value="£ 30,000">
+                        </div>
+                        <div class="pe-field">
+                            <button type="button" class="pe-toggle-button" id="${calculatorType}_include_in_bridging" data-calculator="${calculatorType}">
+                                <span class="pe-toggle-button-check">✓</span>
+                                <span>Include in Bridging Finance</span>
+                            </button>
+                        </div>
+                        <div class="pe-field">
+                            <label class="pe-field-label">Vacant Period (months)</label>
+                            <input type="text" class="pe-input" id="${calculatorType}_vacant_period" data-original-id="vacant_period" data-calculator="${calculatorType}" value="3">
+                        </div>
+                        <a href="#" class="pe-link-add pe-field-detailed" style="display: none;">+ Add additional refurb cost</a>
+                        <div class="pe-subsection pe-field-detailed" style="display: none;">
+                            <h4 class="pe-subsection-title">Annual Expenses During Refurb (Prorated)</h4>
+                            <div class="pe-field">
+                                <label class="pe-field-label">Council Tax</label>
+                                <input type="text" class="pe-input" id="${calculatorType}_refurb_council_tax" data-original-id="refurb_council_tax" data-calculator="${calculatorType}" value="£ 1,670">
+                            </div>
+                            <div class="pe-field">
+                                <label class="pe-field-label">Council Tax (monthly)</label>
+                                <input type="text" class="pe-input" id="${calculatorType}_refurb_council_tax_monthly" value="£ 139.17" readonly>
+                            </div>
+                            <a href="#" class="pe-link-add">+ Add additional annual expense (prorated)</a>
+                        </div>
+                        <div class="pe-subsection pe-field-detailed" style="display: none;">
+                            <h4 class="pe-subsection-title">Monthly Expenses During Refurb</h4>
+                            <div class="pe-field">
+                                <label class="pe-field-label">Electric / Gas</label>
+                                <input type="text" class="pe-input" id="${calculatorType}_refurb_electric_gas" data-original-id="refurb_electric_gas" data-calculator="${calculatorType}" value="£ 60">
+                            </div>
+                            <div class="pe-field">
+                                <label class="pe-field-label">Water</label>
+                                <input type="text" class="pe-input" id="${calculatorType}_refurb_water" data-original-id="refurb_water" data-calculator="${calculatorType}" value="£ 30">
+                            </div>
+                            <div class="pe-field">
+                                <label class="pe-field-label">Insurance</label>
+                                <input type="text" class="pe-input" id="${calculatorType}_refurb_insurance" data-original-id="refurb_insurance" data-calculator="${calculatorType}" value="£ 40">
+                            </div>
+                            <a href="#" class="pe-link-add">+ Add additional monthly expense</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="pe-calculator-right">
+                <div class="pe-section">
+                    <h3 class="pe-section-title">Exit Strategy</h3>
+                    <!-- Exit Strategy content can be added here if needed -->
+                </div>
+                
+                <div class="pe-section">
+                    <h3 class="pe-section-title">Refinance</h3>
+                    <div class="pe-field">
+                        <label class="pe-field-label">Estimated Market Value</label>
+                        <input type="text" class="pe-input" id="${calculatorType}_estimated_market_value" data-original-id="estimated_market_value" data-calculator="${calculatorType}" value="£ 0">
+                    </div>
+                    <div class="pe-field">
+                        <label class="pe-field-label">Mortgage Payments / pcm</label>
+                        <input type="text" class="pe-input" id="${calculatorType}_refinance_mortgage_payments" value="£ 0" readonly>
+                    </div>
+                    <div class="pe-field">
+                        <label class="pe-field-label">Locked In Equity</label>
+                        <input type="text" class="pe-input" id="${calculatorType}_locked_in_equity" value="£ 0" readonly>
+                    </div>
+                    <div class="pe-field">
+                        <label class="pe-field-label">Money Left In</label>
+                        <input type="text" class="pe-input" id="${calculatorType}_money_left_in" value="£ 0" readonly>
+                    </div>
+                    <div class="pe-field">
+                        <label class="pe-field-label">Ideal Purchase Price (max)</label>
+                        <input type="text" class="pe-input" id="${calculatorType}_ideal_purchase_price" value="£ 0" readonly>
+                    </div>
+                    <div id="${calculatorType}_additional_refinance_costs"></div>
+                    <a href="#" class="pe-link-add" id="${calculatorType}_add_refinance_cost">+ Add additional refinance cost</a>
+                    <div class="pe-field pe-field-detailed" style="display: none;">
+                        <label class="pe-field-label">Mortgage Set-up Fee</label>
+                        <input type="text" class="pe-input" id="${calculatorType}_refinance_setup_fee" data-original-id="refinance_setup_fee" data-calculator="${calculatorType}" value="£ 0">
+                    </div>
+                    <div class="pe-field pe-field-detailed" style="display: none;">
+                        <label class="pe-field-label">Mortgage Loan to Value</label>
+                        <input type="text" class="pe-input" id="${calculatorType}_refinance_ltv" data-original-id="refinance_ltv" data-calculator="${calculatorType}" value="75 %">
+                    </div>
+                    <div class="pe-field pe-field-detailed pe-field-inline" style="display: none;">
+                        <label class="pe-field-label">Mortgage Type</label>
+                        <div class="pe-financing-type-group">
+                            <button type="button" class="pe-financing-type pe-financing-type-active" data-refinance-mortgage-type="interest_only" data-calculator="${calculatorType}">
+                                <span class="pe-financing-check">✓</span>
+                                <span>Interest Only</span>
+                            </button>
+                            <button type="button" class="pe-financing-type" data-refinance-mortgage-type="repayment" data-calculator="${calculatorType}">
+                                <span class="pe-financing-check">✓</span>
+                                <span>Repayment</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="pe-field pe-field-detailed" style="display: none;">
+                        <label class="pe-field-label">Mortgage Interest Rate (APR)</label>
+                        <input type="text" class="pe-input" id="${calculatorType}_refinance_interest_rate" data-original-id="refinance_interest_rate" data-calculator="${calculatorType}" value="5.5 %">
+                    </div>
+                </div>
+                
+                <div class="pe-section">
+                    <h3 class="pe-section-title">Rental Income</h3>
+                    <div class="pe-field">
+                        <label class="pe-field-label required">Monthly Rent</label>
+                        <input type="text" class="pe-input" id="${calculatorType}_monthly_rent" data-original-id="monthly_rent" data-calculator="${calculatorType}" placeholder="Required">
+                    </div>
+                    <div class="pe-field">
+                        <label class="pe-field-label">Gross Yield</label>
+                        <input type="text" class="pe-input" id="${calculatorType}_gross_yield" value="-" readonly>
+                    </div>
+                </div>
+                
+                <div class="pe-section pe-field-detailed" style="display: none;">
+                    <h3 class="pe-section-title">Ongoing Costs</h3>
+                    <div class="pe-field">
+                        <label class="pe-field-label">Annual Expenses</label>
+                        <input type="text" class="pe-input" id="${calculatorType}_annual_expenses" data-original-id="annual_expenses" data-calculator="${calculatorType}" value="">
+                    </div>
+                    <div class="pe-field">
+                        <label class="pe-field-label">% of Income on Maintenance</label>
+                        <input type="text" class="pe-input" id="${calculatorType}_maintenance_percent" data-original-id="maintenance_percent" data-calculator="${calculatorType}" value="10 %">
+                    </div>
+                    <a href="#" class="pe-link-add">+ Add additional annual expense</a>
+                </div>
+                
+                <div class="pe-section pe-field-detailed" style="display: none;">
+                    <h3 class="pe-section-title">Monthly Expenses</h3>
+                    <div class="pe-field">
+                        <label class="pe-field-label">Mortgage Payments</label>
+                        <input type="text" class="pe-input" id="${calculatorType}_ongoing_mortgage_payments" value="£ 0" readonly>
+                    </div>
+                    <div class="pe-field">
+                        <label class="pe-field-label">Insurance</label>
+                        <input type="text" class="pe-input" id="${calculatorType}_ongoing_insurance" data-original-id="ongoing_insurance" data-calculator="${calculatorType}" value="£ 40">
+                    </div>
+                    <div class="pe-field">
+                        <label class="pe-field-label">Agent Fees</label>
+                        <input type="text" class="pe-input" id="${calculatorType}_agent_fees" data-original-id="agent_fees" data-calculator="${calculatorType}" value="10 %">
+                    </div>
+                    <a href="#" class="pe-link-add">+ Add additional monthly expense</a>
+                </div>
+                
+                <div class="pe-section">
+                    <h3 class="pe-section-title">Summary</h3>
+                    <div class="pe-field">
+                        <label class="pe-field-label">Total Annual Expenses</label>
+                        <input type="text" class="pe-input" id="${calculatorType}_total_annual_expenses" value="£ 0" readonly>
+                    </div>
+                    <div class="pe-field">
+                        <label class="pe-field-label">Annual Profit</label>
+                        <input type="text" class="pe-input" id="${calculatorType}_annual_profit" value="£ 0" readonly>
+                    </div>
+                    <div class="pe-field">
+                        <label class="pe-field-label">Monthly Profit</label>
+                        <input type="text" class="pe-input" id="${calculatorType}_monthly_profit" value="£ 0" readonly>
+                    </div>
+                    <a href="#" class="pe-link-add" id="${calculatorType}_edit_thresholds">Edit target thresholds</a>
+                </div>
+                
+                <!-- Threshold Settings Modal -->
+                <div class="pe-threshold-modal" id="${calculatorType}_threshold_modal" style="display: none;">
+                    <div class="pe-threshold-modal-content">
+                        <div class="pe-threshold-header">
+                            <h3>Set the thresholds at which point figures will appear in green to indicate a good investment.</h3>
+                        </div>
+                        <div class="pe-threshold-settings">
+                            <div class="pe-threshold-option-group">
+                                <button type="button" class="pe-threshold-option" id="${calculatorType}_use_account_settings">
+                                    <span class="pe-financing-check">✓</span>
+                                    <span>Use account settings</span>
+                                </button>
+                                <button type="button" class="pe-threshold-option pe-threshold-option-active" id="${calculatorType}_use_calculator_settings">
+                                    <span class="pe-financing-check">✓</span>
+                                    <span>Use calculator settings</span>
+                                </button>
+                            </div>
+                            <div class="pe-threshold-fields">
+                                <div class="pe-field">
+                                    <label class="pe-field-label">Return on capital employed</label>
+                                    <input type="text" class="pe-input" id="${calculatorType}_threshold_roce" value="10 %" data-calculator="${calculatorType}">
+                                </div>
+                                <div class="pe-field">
+                                    <label class="pe-field-label">Gross Yield</label>
+                                    <input type="text" class="pe-input" id="${calculatorType}_threshold_gross_yield" value="5 %" data-calculator="${calculatorType}">
+                                </div>
+                                <div class="pe-field">
+                                    <label class="pe-field-label">Net Yield</label>
+                                    <input type="text" class="pe-input" id="${calculatorType}_threshold_net_yield" value="5 %" data-calculator="${calculatorType}">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="pe-metrics">
+            <div class="pe-metrics-short">
+                <div class="pe-metric-box">
+                    <div class="pe-metric-label">Return on capital employed</div>
+                    <div class="pe-metric-value" id="${calculatorType}_roce">-%</div>
+                    <span class="pe-info-icon" title="Return on capital employed">i</span>
+                </div>
+                <div class="pe-metric-box">
+                    <div class="pe-metric-label">Gross yield</div>
+                    <div class="pe-metric-value" id="${calculatorType}_gross_yield_metric">-%</div>
+                    <span class="pe-info-icon" title="Gross yield">i</span>
+                </div>
+                <div class="pe-metric-box">
+                    <div class="pe-metric-label">Net yield</div>
+                    <div class="pe-metric-value" id="${calculatorType}_net_yield">-%</div>
+                    <span class="pe-info-icon" title="Net yield">i</span>
+                </div>
+            </div>
+            <div class="pe-metrics-long">
+                <div class="pe-metric-box pe-metric-box-blue">
+                    <div class="pe-metric-label">Equity in 10 years</div>
+                    <div class="pe-metric-value" id="${calculatorType}_equity_10_years">£0</div>
+                    <span class="pe-info-icon" title="Projected equity after 10 years">i</span>
+                </div>
+            </div>
+            <div class="pe-metrics-appreciation">
+                <label class="pe-field-label">Annual Property Appreciation</label>
+                <input type="text" class="pe-input pe-input-small" id="${calculatorType}_appreciation" value="5.5%" data-calculator="${calculatorType}">
+            </div>
+        </div>
+    `;
+    
+    // Add event listeners
+    setupBRRCalculatorEvents(section, calculatorType);
+    
+    return section;
+}
+
+function setupBRRCalculatorEvents(section, calculatorType) {
+    // Detailed view toggle
+    const detailedViewToggle = section.querySelector(`#${calculatorType}_detailed_view`);
+    if (detailedViewToggle) {
+        detailedViewToggle.addEventListener('change', (e) => {
+            const detailedFields = section.querySelectorAll('.pe-field-detailed');
+            const hiddenInput = section.querySelector(`#${calculatorType}_financing_type_hidden`);
+            const financingType = hiddenInput?.value || 'bridging';
+            
+            detailedFields.forEach(field => {
+                if (e.target.checked) {
+                    // Show fields based on financing type
+                    if (field.classList.contains('pe-field-bridging') && financingType === 'bridging') {
+                        field.style.display = 'block';
+                    } else if (field.classList.contains('pe-field-mortgage') && financingType === 'mortgage') {
+                        // For mortgage fields, check if it's a repayment field
+                        if (field.classList.contains('pe-field-repayment')) {
+                            const repaymentBtn = section.querySelector('[data-mortgage-type="repayment"]');
+                            const isRepayment = repaymentBtn?.classList.contains('pe-financing-type-active') || false;
+                            field.style.display = isRepayment ? 'block' : 'none';
+                        } else {
+                            field.style.display = 'block';
+                        }
+                    } else if (!field.classList.contains('pe-field-bridging') && !field.classList.contains('pe-field-mortgage')) {
+                        field.style.display = 'block';
+                    } else {
+                        field.style.display = 'none';
+                    }
+                } else {
+                    field.style.display = 'none';
+                }
+            });
+            // Update label text
+            const label = detailedViewToggle.parentElement.querySelector('span');
+            if (label) {
+                label.textContent = e.target.checked ? 'Switch to simple view' : 'Switch to detailed view';
+            }
+        });
+    }
+    
+    // Toggle switches
+    const refurbToggle = section.querySelector(`#${calculatorType}_refurb_enabled`);
+    
+    if (refurbToggle) {
+        refurbToggle.addEventListener('change', (e) => {
+            const content = section.querySelector(`#${calculatorType}_refurb_content`);
+            if (content) {
+                content.style.display = e.target.checked ? 'block' : 'none';
+            }
+            calculateBRRValues(calculatorType);
+        });
+    }
+    
+    // Helper function to update "Include in Bridging Finance" button state
+    const updateIncludeInBridgingButton = (financingType) => {
+        const includeInBridgingBtn = section.querySelector(`#${calculatorType}_include_in_bridging`);
+        if (includeInBridgingBtn) {
+            if (financingType === 'bridging') {
+                // Enable the button when bridging finance is selected
+                includeInBridgingBtn.disabled = false;
+            } else {
+                // Disable the button when mortgage or cash is selected
+                includeInBridgingBtn.disabled = true;
+                // Also uncheck it if it was checked
+                if (includeInBridgingBtn.classList.contains('pe-toggle-button-active')) {
+                    includeInBridgingBtn.classList.remove('pe-toggle-button-active');
+                    calculateBRRValues(calculatorType);
+                }
+            }
+        }
+    };
+    
+    // Financing type buttons (Mortgage/Bridging/Cash - not the mortgage type buttons)
+    const financingTypeButtons = section.querySelectorAll('[data-type]');
+    const financingPaymentField = section.querySelector(`#${calculatorType}_financing_payment_field`);
+    const financingPaymentLabel = section.querySelector(`#${calculatorType}_financing_payment_label`);
+    
+    // Initialize field state based on default selected financing type
+    const defaultFinancingBtn = section.querySelector('[data-type].pe-financing-type-active');
+    if (defaultFinancingBtn && financingPaymentField && financingPaymentLabel) {
+        const defaultType = defaultFinancingBtn.dataset.type;
+        if (defaultType === 'cash') {
+            financingPaymentField.style.display = 'none';
+        } else {
+            financingPaymentField.style.display = 'block';
+            if (defaultType === 'mortgage') {
+                financingPaymentLabel.textContent = 'Mortgage Payments / pcm';
+            } else if (defaultType === 'bridging') {
+                financingPaymentLabel.textContent = 'Bridging Interest / pcm';
+            }
+        }
+        // Initialize "Include in Bridging Finance" button state
+        updateIncludeInBridgingButton(defaultType);
+    }
+    
+    financingTypeButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            financingTypeButtons.forEach(b => b.classList.remove('pe-financing-type-active'));
+            btn.classList.add('pe-financing-type-active');
+            const hiddenInput = section.querySelector(`#${calculatorType}_financing_type_hidden`);
+            const selectedType = btn.dataset.type;
+            
+            if (hiddenInput) {
+                hiddenInput.value = selectedType;
+            }
+            
+            // Update the payment field label and visibility based on financing type
+            if (financingPaymentField && financingPaymentLabel) {
+                if (selectedType === 'cash') {
+                    // Hide the field for cash
+                    financingPaymentField.style.display = 'none';
+                } else {
+                    // Show the field for mortgage or bridging
+                    financingPaymentField.style.display = 'block';
+                    if (selectedType === 'mortgage') {
+                        financingPaymentLabel.textContent = 'Mortgage Payments / pcm';
+                        // Set Interest Only as default when switching to Mortgage
+                        const interestOnlyBtn = section.querySelector('[data-mortgage-type="interest_only"]');
+                        const repaymentBtn = section.querySelector('[data-mortgage-type="repayment"]');
+                        if (interestOnlyBtn && repaymentBtn) {
+                            repaymentBtn.classList.remove('pe-financing-type-active');
+                            interestOnlyBtn.classList.add('pe-financing-type-active');
+                            // Hide Mortgage Term field
+                            const repaymentFields = section.querySelectorAll('.pe-field-repayment');
+                            repaymentFields.forEach(field => {
+                                field.style.display = 'none';
+                            });
+                        }
+                    } else if (selectedType === 'bridging') {
+                        financingPaymentLabel.textContent = 'Bridging Interest / pcm';
+                    }
+                }
+            }
+            
+            // Update detailed view fields visibility based on financing type
+            const detailedViewToggle = section.querySelector(`#${calculatorType}_detailed_view`);
+            if (detailedViewToggle && detailedViewToggle.checked) {
+                const bridgingFields = section.querySelectorAll('.pe-field-bridging');
+                const mortgageFields = section.querySelectorAll('.pe-field-mortgage');
+                const repaymentFields = section.querySelectorAll('.pe-field-repayment');
+                
+                bridgingFields.forEach(field => {
+                    field.style.display = selectedType === 'bridging' ? 'block' : 'none';
+                });
+                
+                mortgageFields.forEach(field => {
+                    if (selectedType === 'mortgage') {
+                        // Show all mortgage fields first
+                        field.style.display = 'block';
+                        // Then hide repayment fields if repayment is not selected
+                        if (field.classList.contains('pe-field-repayment')) {
+                            const repaymentBtn = section.querySelector('[data-mortgage-type="repayment"]');
+                            const isRepayment = repaymentBtn?.classList.contains('pe-financing-type-active') || false;
+                            field.style.display = isRepayment ? 'block' : 'none';
+                        }
+                    } else {
+                        field.style.display = 'none';
+                    }
+                });
+            }
+            
+            // Update "Include in Bridging Finance" button state
+            updateIncludeInBridgingButton(selectedType);
+            
+            calculateBRRValues(calculatorType);
+        });
+    });
+    
+    // Include in Bridging Finance toggle button
+    const includeInBridgingBtn = section.querySelector(`#${calculatorType}_include_in_bridging`);
+    if (includeInBridgingBtn) {
+        includeInBridgingBtn.addEventListener('click', () => {
+            // Button is disabled when not bridging, so we can safely toggle
+            includeInBridgingBtn.classList.toggle('pe-toggle-button-active');
+            calculateBRRValues(calculatorType);
+        });
+    }
+    
+    // Bridging Set-up Fee toggle (between % and £)
+    const bridgingFeeTypeButtons = section.querySelectorAll('[data-fee-type]:not([data-fee-for="mortgage"])');
+    bridgingFeeTypeButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const feeType = btn.dataset.feeType;
+            const setupFeeInput = section.querySelector(`#${calculatorType}_bridging_setup_fee`);
+            
+            bridgingFeeTypeButtons.forEach(b => b.classList.remove('pe-toggle-small-active'));
+            btn.classList.add('pe-toggle-small-active');
+            
+            // Update the input value format based on selected type
+            if (setupFeeInput && feeType === 'currency') {
+                const currentValue = setupFeeInput.value.replace(/[£%\s,]/g, '');
+                setupFeeInput.value = `£ ${currentValue}`;
+            } else if (setupFeeInput && feeType === 'percent') {
+                const currentValue = setupFeeInput.value.replace(/[£%\s,]/g, '');
+                setupFeeInput.value = `${currentValue} %`;
+            }
+            
+            calculateBRRValues(calculatorType);
+        });
+    });
+    
+    // Mortgage Set-up Fee toggle (between £ and %)
+    const mortgageFeeTypeButtons = section.querySelectorAll('[data-fee-type][data-fee-for="mortgage"]');
+    mortgageFeeTypeButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const feeType = btn.dataset.feeType;
+            const setupFeeInput = section.querySelector(`#${calculatorType}_mortgage_setup_fee`);
+            
+            mortgageFeeTypeButtons.forEach(b => b.classList.remove('pe-toggle-small-active'));
+            btn.classList.add('pe-toggle-small-active');
+            
+            // Update the input value format based on selected type
+            if (setupFeeInput && feeType === 'currency') {
+                const currentValue = setupFeeInput.value.replace(/[£%\s,]/g, '');
+                setupFeeInput.value = `£ ${currentValue}`;
+            } else if (setupFeeInput && feeType === 'percent') {
+                const currentValue = setupFeeInput.value.replace(/[£%\s,]/g, '');
+                setupFeeInput.value = `${currentValue} %`;
+            }
+            
+            calculateBRRValues(calculatorType);
+        });
+    });
+    
+    // Mortgage type buttons (Initial Financing)
+    const initialMortgageTypeButtons = section.querySelectorAll('[data-mortgage-type]');
+    initialMortgageTypeButtons.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation(); // Prevent event bubbling
+            initialMortgageTypeButtons.forEach(b => b.classList.remove('pe-financing-type-active'));
+            btn.classList.add('pe-financing-type-active');
+            
+            const mortgageType = btn.dataset.mortgageType;
+            const repaymentFields = section.querySelectorAll('.pe-field-repayment');
+            const detailedViewToggle = section.querySelector(`#${calculatorType}_detailed_view`);
+            const hiddenInput = section.querySelector(`#${calculatorType}_financing_type_hidden`);
+            const financingType = hiddenInput?.value || 'bridging';
+            
+            // Show/hide Mortgage Term field based on mortgage type
+            // Only update if detailed view is enabled and mortgage is selected
+            if (detailedViewToggle && detailedViewToggle.checked && financingType === 'mortgage') {
+                // Show/hide only the repayment-specific fields
+                repaymentFields.forEach(field => {
+                    field.style.display = mortgageType === 'repayment' ? 'block' : 'none';
+                });
+                // Ensure all other mortgage fields remain visible
+                const allMortgageFields = section.querySelectorAll('.pe-field-mortgage');
+                allMortgageFields.forEach(field => {
+                    // Don't hide non-repayment fields
+                    if (!field.classList.contains('pe-field-repayment')) {
+                        field.style.display = 'block';
+                    }
+                });
+            }
+            
+            calculateBRRValues(calculatorType);
+        });
+    });
+    
+    // Mortgage type buttons (Refinance)
+    const refinanceMortgageTypeButtons = section.querySelectorAll('[data-refinance-mortgage-type]');
+    refinanceMortgageTypeButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            refinanceMortgageTypeButtons.forEach(b => b.classList.remove('pe-financing-type-active'));
+            btn.classList.add('pe-financing-type-active');
+            calculateBRRValues(calculatorType);
+        });
+    });
+    
+    // Stamp duty collapsible toggle
+    const stampDutyToggle = section.querySelector(`#${calculatorType}_stamp_duty_toggle`);
+    if (stampDutyToggle) {
+        stampDutyToggle.addEventListener('click', () => {
+            const content = document.getElementById(stampDutyToggle.dataset.target);
+            if (content) {
+                const isHidden = content.style.display === 'none';
+                content.style.display = isHidden ? 'block' : 'none';
+                const icon = stampDutyToggle.querySelector('.pe-toggle-expand-icon');
+                if (icon) {
+                    icon.textContent = isHidden ? '▲' : '▼';
+                }
+            }
+        });
+    }
+    
+    // Stamp duty period dropdown and buttons
+    const stampDutyPeriod = section.querySelector(`#${calculatorType}_stamp_duty_period`);
+    const stampDutyButtons = section.querySelectorAll(`#${calculatorType}_individual_moving, #${calculatorType}_first_time_buyer, #${calculatorType}_overseas_buyer`);
+    
+    if (stampDutyPeriod) {
+        stampDutyPeriod.addEventListener('change', () => {
+            calculateBRRValues(calculatorType);
+        });
+    }
+    
+    // Individual Moving Home button - show/hide First Time Buyer
+    const individualMovingBtn = section.querySelector(`#${calculatorType}_individual_moving`);
+    const firstTimeBuyerBtn = section.querySelector(`#${calculatorType}_first_time_buyer`);
+    const overseasBuyerBtn = section.querySelector(`#${calculatorType}_overseas_buyer`);
+    
+    if (individualMovingBtn) {
+        individualMovingBtn.addEventListener('click', () => {
+            individualMovingBtn.classList.toggle('pe-option-button-active');
+            const isChecked = individualMovingBtn.classList.contains('pe-option-button-active');
+            
+            // Show/hide First Time Buyer option
+            if (firstTimeBuyerBtn) {
+                firstTimeBuyerBtn.style.display = isChecked ? 'flex' : 'none';
+                // If Individual Moving Home is unchecked, also uncheck First Time Buyer
+                if (!isChecked && firstTimeBuyerBtn.classList.contains('pe-option-button-active')) {
+                    firstTimeBuyerBtn.classList.remove('pe-option-button-active');
+                }
+            }
+            
+            calculateBRRValues(calculatorType);
+        });
+    }
+    
+    // First Time Buyer button
+    if (firstTimeBuyerBtn) {
+        firstTimeBuyerBtn.addEventListener('click', () => {
+            firstTimeBuyerBtn.classList.toggle('pe-option-button-active');
+            calculateBRRValues(calculatorType);
+        });
+    }
+    
+    // Overseas Buyer button
+    if (overseasBuyerBtn) {
+        overseasBuyerBtn.addEventListener('click', () => {
+            overseasBuyerBtn.classList.toggle('pe-option-button-active');
+            calculateBRRValues(calculatorType);
+        });
+    }
+    
+    // Input change listeners for real-time calculation
+    const inputs = section.querySelectorAll('input[data-calculator="' + calculatorType + '"]');
+    inputs.forEach(input => {
+        input.addEventListener('input', () => {
+            calculateBRRValues(calculatorType);
+        });
+        input.addEventListener('change', () => {
+            calculateBRRValues(calculatorType);
+        });
+    });
+    
+    // Also listen to purchase price input specifically (it might not have data-calculator attribute)
+    const purchasePriceInput = section.querySelector(`#${calculatorType}_purchase_price`);
+    if (purchasePriceInput) {
+        purchasePriceInput.addEventListener('input', () => {
+            calculateBRRValues(calculatorType);
+        });
+        purchasePriceInput.addEventListener('change', () => {
+            calculateBRRValues(calculatorType);
+        });
+    }
+    
+    // Add additional refinance cost functionality
+    const addRefinanceCostLink = section.querySelector(`#${calculatorType}_add_refinance_cost`);
+    const additionalCostsContainer = section.querySelector(`#${calculatorType}_additional_refinance_costs`);
+    let refinanceCostCounter = 0;
+    
+    if (addRefinanceCostLink && additionalCostsContainer) {
+        addRefinanceCostLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            refinanceCostCounter++;
+            const costId = `${calculatorType}_additional_refinance_cost_${refinanceCostCounter}`;
+            
+            const costField = document.createElement('div');
+            costField.className = 'pe-field';
+            costField.innerHTML = `
+                <label class="pe-field-label">Additional Refinance Cost ${refinanceCostCounter}</label>
+                <div class="pe-field-with-action">
+                    <input type="text" class="pe-input" id="${costId}" data-original-id="additional_refinance_cost_${refinanceCostCounter}" data-calculator="${calculatorType}" value="£ 0" placeholder="£ 0">
+                    <button type="button" class="pe-btn-remove" data-cost-id="${costId}">×</button>
+                </div>
+            `;
+            
+            additionalCostsContainer.appendChild(costField);
+            
+            // Add event listener for the input
+            const input = costField.querySelector(`#${costId}`);
+            if (input) {
+                input.addEventListener('input', () => {
+                    calculateBRRValues(calculatorType);
+                });
+                input.addEventListener('change', () => {
+                    calculateBRRValues(calculatorType);
+                });
+            }
+            
+            // Add event listener for remove button
+            const removeBtn = costField.querySelector('.pe-btn-remove');
+            if (removeBtn) {
+                removeBtn.addEventListener('click', () => {
+                    costField.remove();
+                    calculateBRRValues(calculatorType);
+                });
+            }
+        });
+    }
+    
+    // Edit target thresholds modal
+    const editThresholdsLink = section.querySelector(`#${calculatorType}_edit_thresholds`);
+    const thresholdModal = section.querySelector(`#${calculatorType}_threshold_modal`);
+    const useAccountSettingsBtn = section.querySelector(`#${calculatorType}_use_account_settings`);
+    const useCalculatorSettingsBtn = section.querySelector(`#${calculatorType}_use_calculator_settings`);
+    
+    if (editThresholdsLink && thresholdModal) {
+        editThresholdsLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            thresholdModal.style.display = thresholdModal.style.display === 'none' ? 'block' : 'none';
+        });
+    }
+    
+    if (useAccountSettingsBtn && useCalculatorSettingsBtn) {
+        useAccountSettingsBtn.addEventListener('click', () => {
+            useAccountSettingsBtn.classList.add('pe-threshold-option-active');
+            useCalculatorSettingsBtn.classList.remove('pe-threshold-option-active');
+        });
+        
+        useCalculatorSettingsBtn.addEventListener('click', () => {
+            useCalculatorSettingsBtn.classList.add('pe-threshold-option-active');
+            useAccountSettingsBtn.classList.remove('pe-threshold-option-active');
+        });
+    }
+    
+    // Close modal when clicking outside
+    if (thresholdModal) {
+        thresholdModal.addEventListener('click', (e) => {
+            if (e.target === thresholdModal) {
+                thresholdModal.style.display = 'none';
+            }
+        });
+    }
+    
+    // Initial calculation
+    setTimeout(() => calculateBRRValues(calculatorType), 100);
+}
+
+function calculateStampDuty(price, period, individualMoving, firstTimeBuyer, overseasBuyer, breakdown, isAdditionalProperty = false) {
+    let total = 0;
+    breakdown.length = 0; // Clear breakdown array
+    
+    if (period === 'none' || price <= 0) {
+        return 0;
+    }
+    
+    // Additional property rates (buy-to-let/second home) - applies to all periods
+    if (isAdditionalProperty) {
+        if (period === 'current') {
+            // Additional property rates from 1 April 2025
+            if (price <= 125000) {
+                total = price * 0.05;
+                breakdown.push({ label: 'Up to £125k @ 5%', value: total });
+            } else if (price <= 250000) {
+                const band1 = 125000 * 0.05;
+                const band2 = (price - 125000) * 0.07;
+                total = band1 + band2;
+                breakdown.push({ label: 'Up to £125k @ 5%', value: band1 });
+                breakdown.push({ label: '£125k - £250k @ 7%', value: band2 });
+            } else if (price <= 925000) {
+                const band1 = 125000 * 0.05;
+                const band2 = 125000 * 0.07;
+                const band3 = (price - 250000) * 0.10;
+                total = band1 + band2 + band3;
+                breakdown.push({ label: 'Up to £125k @ 5%', value: band1 });
+                breakdown.push({ label: '£125k - £250k @ 7%', value: band2 });
+                breakdown.push({ label: '£250k - £925k @ 10%', value: band3 });
+            } else if (price <= 1500000) {
+                const band1 = 125000 * 0.05;
+                const band2 = 125000 * 0.07;
+                const band3 = 675000 * 0.10;
+                const band4 = (price - 925000) * 0.15;
+                total = band1 + band2 + band3 + band4;
+                breakdown.push({ label: 'Up to £125k @ 5%', value: band1 });
+                breakdown.push({ label: '£125k - £250k @ 7%', value: band2 });
+                breakdown.push({ label: '£250k - £925k @ 10%', value: band3 });
+                breakdown.push({ label: '£925k - £1.5M @ 15%', value: band4 });
+            } else {
+                const band1 = 125000 * 0.05;
+                const band2 = 125000 * 0.07;
+                const band3 = 675000 * 0.10;
+                const band4 = 575000 * 0.15;
+                const band5 = (price - 1500000) * 0.17;
+                total = band1 + band2 + band3 + band4 + band5;
+                breakdown.push({ label: 'Up to £125k @ 5%', value: band1 });
+                breakdown.push({ label: '£125k - £250k @ 7%', value: band2 });
+                breakdown.push({ label: '£250k - £925k @ 10%', value: band3 });
+                breakdown.push({ label: '£925k - £1.5M @ 15%', value: band4 });
+                breakdown.push({ label: 'Over £1.5M @ 17%', value: band5 });
+            }
+        } else {
+            // For historical periods, use similar additional property rates
+            // (rates may vary, but structure is similar)
+            if (price <= 125000) {
+                total = price * 0.05;
+                breakdown.push({ label: 'Up to £125k @ 5%', value: total });
+            } else if (price <= 250000) {
+                const band1 = 125000 * 0.05;
+                const band2 = (price - 125000) * 0.07;
+                total = band1 + band2;
+                breakdown.push({ label: 'Up to £125k @ 5%', value: band1 });
+                breakdown.push({ label: '£125k - £250k @ 7%', value: band2 });
+            } else if (price <= 925000) {
+                const band1 = 125000 * 0.05;
+                const band2 = 125000 * 0.07;
+                const band3 = (price - 250000) * 0.10;
+                total = band1 + band2 + band3;
+                breakdown.push({ label: 'Up to £125k @ 5%', value: band1 });
+                breakdown.push({ label: '£125k - £250k @ 7%', value: band2 });
+                breakdown.push({ label: '£250k - £925k @ 10%', value: band3 });
+            } else if (price <= 1500000) {
+                const band1 = 125000 * 0.05;
+                const band2 = 125000 * 0.07;
+                const band3 = 675000 * 0.10;
+                const band4 = (price - 925000) * 0.15;
+                total = band1 + band2 + band3 + band4;
+                breakdown.push({ label: 'Up to £125k @ 5%', value: band1 });
+                breakdown.push({ label: '£125k - £250k @ 7%', value: band2 });
+                breakdown.push({ label: '£250k - £925k @ 10%', value: band3 });
+                breakdown.push({ label: '£925k - £1.5M @ 15%', value: band4 });
+            } else {
+                const band1 = 125000 * 0.05;
+                const band2 = 125000 * 0.07;
+                const band3 = 675000 * 0.10;
+                const band4 = 575000 * 0.15;
+                const band5 = (price - 1500000) * 0.17;
+                total = band1 + band2 + band3 + band4 + band5;
+                breakdown.push({ label: 'Up to £125k @ 5%', value: band1 });
+                breakdown.push({ label: '£125k - £250k @ 7%', value: band2 });
+                breakdown.push({ label: '£250k - £925k @ 10%', value: band3 });
+                breakdown.push({ label: '£925k - £1.5M @ 15%', value: band4 });
+                breakdown.push({ label: 'Over £1.5M @ 17%', value: band5 });
+            }
+        }
+        
+        // Apply overseas buyer surcharge on top of additional property rates
+        if (overseasBuyer) {
+            const surcharge = price * 0.02;
+            total += surcharge;
+            breakdown.push({ label: 'Overseas Buyer Surcharge (2%)', value: surcharge });
+        }
+        
+        return total;
+    }
+    
+    // Current rates (from 1st April 2025) - Standard UK rates
+    if (period === 'current') {
+        // Calculate base stamp duty (standard rates or first-time buyer rates)
+        let baseTotal = 0;
+        
+        if (firstTimeBuyer && price <= 500000) {
+            // First-time buyer relief (from 1 April 2025)
+            if (price <= 300000) {
+                baseTotal = 0;
+                breakdown.push({ label: '£0 - £300k @ 0%', value: 0 });
+            } else {
+                const band1 = (price - 300000) * 0.05;
+                baseTotal = band1;
+                breakdown.push({ label: '£0 - £300k @ 0%', value: 0 });
+                breakdown.push({ label: '£300k - £500k @ 5%', value: band1 });
+            }
+        } else {
+            // Standard rates (from 1 April 2025) - applies to Individual Moving Home and regular purchases
+            if (price <= 125000) {
+                baseTotal = 0;
+                breakdown.push({ label: '£0 - £125k @ 0%', value: 0 });
+            } else if (price <= 250000) {
+                const band1 = (price - 125000) * 0.02;
+                baseTotal = band1;
+                breakdown.push({ label: '£0 - £125k @ 0%', value: 0 });
+                breakdown.push({ label: '£125k - £250k @ 2%', value: band1 });
+            } else if (price <= 925000) {
+                const band1 = 125000 * 0.02;
+                const band2 = (price - 250000) * 0.05;
+                baseTotal = band1 + band2;
+                breakdown.push({ label: '£0 - £125k @ 0%', value: 0 });
+                breakdown.push({ label: '£125k - £250k @ 2%', value: band1 });
+                breakdown.push({ label: '£250k - £925k @ 5%', value: band2 });
+            } else if (price <= 1500000) {
+                const band1 = 125000 * 0.02;
+                const band2 = 675000 * 0.05;
+                const band3 = (price - 925000) * 0.10;
+                baseTotal = band1 + band2 + band3;
+                breakdown.push({ label: '£0 - £125k @ 0%', value: 0 });
+                breakdown.push({ label: '£125k - £250k @ 2%', value: band1 });
+                breakdown.push({ label: '£250k - £925k @ 5%', value: band2 });
+                breakdown.push({ label: '£925k - £1.5M @ 10%', value: band3 });
+            } else {
+                const band1 = 125000 * 0.02;
+                const band2 = 675000 * 0.05;
+                const band3 = 575000 * 0.10;
+                const band4 = (price - 1500000) * 0.12;
+                baseTotal = band1 + band2 + band3 + band4;
+                breakdown.push({ label: '£0 - £125k @ 0%', value: 0 });
+                breakdown.push({ label: '£125k - £250k @ 2%', value: band1 });
+                breakdown.push({ label: '£250k - £925k @ 5%', value: band2 });
+                breakdown.push({ label: '£925k - £1.5M @ 10%', value: band3 });
+                breakdown.push({ label: 'Over £1.5M @ 12%', value: band4 });
+            }
+        }
+        
+        total = baseTotal;
+        
+        // Note: Overseas buyer surcharge is applied at the end of the function for all periods
+    } else if (period === '2024-2025') {
+        // Rates from 31st Oct 2024 - 31st Mar 2025
+        if (price <= 250000) {
+            total = 0;
+            breakdown.push({ label: '£0 - £250k @ 0%', value: 0 });
+        } else if (price <= 925000) {
+            const band1 = (price - 250000) * 0.05;
+            total = band1;
+            breakdown.push({ label: '£0 - £250k @ 0%', value: 0 });
+            breakdown.push({ label: '£250k - £925k @ 5%', value: band1 });
+        } else if (price <= 1500000) {
+            const band1 = 675000 * 0.05;
+            const band2 = (price - 925000) * 0.10;
+            total = band1 + band2;
+            breakdown.push({ label: '£0 - £250k @ 0%', value: 0 });
+            breakdown.push({ label: '£250k - £925k @ 5%', value: band1 });
+            breakdown.push({ label: '£925k - £1.5M @ 10%', value: band2 });
+        } else {
+            const band1 = 675000 * 0.05;
+            const band2 = 575000 * 0.10;
+            const band3 = (price - 1500000) * 0.12;
+            total = band1 + band2 + band3;
+            breakdown.push({ label: '£0 - £250k @ 0%', value: 0 });
+            breakdown.push({ label: '£250k - £925k @ 5%', value: band1 });
+            breakdown.push({ label: '£925k - £1.5M @ 10%', value: band2 });
+            breakdown.push({ label: 'Over £1.5M @ 12%', value: band3 });
+        }
+    } else if (period === '2022-2024') {
+        // Rates from 23rd Sep 2022 - 31st Oct 2024
+        // Standard rates (Individual Moving Home uses these)
+        if (firstTimeBuyer && price <= 500000) {
+            // First-time buyer relief
+            if (price <= 300000) {
+                total = 0;
+                breakdown.push({ label: '£0 - £300k @ 0%', value: 0 });
+            } else {
+                const band1 = (price - 300000) * 0.05;
+                total = band1;
+                breakdown.push({ label: '£0 - £300k @ 0%', value: 0 });
+                breakdown.push({ label: '£300k - £500k @ 5%', value: band1 });
+            }
+        } else {
+            // Standard rates
+            if (price <= 250000) {
+                total = 0;
+                breakdown.push({ label: '£0 - £250k @ 0%', value: 0 });
+            } else if (price <= 925000) {
+                const band1 = (price - 250000) * 0.05;
+                total = band1;
+                breakdown.push({ label: '£0 - £250k @ 0%', value: 0 });
+                breakdown.push({ label: '£250k - £925k @ 5%', value: band1 });
+            } else if (price <= 1500000) {
+                const band1 = 675000 * 0.05;
+                const band2 = (price - 925000) * 0.10;
+                total = band1 + band2;
+                breakdown.push({ label: '£0 - £250k @ 0%', value: 0 });
+                breakdown.push({ label: '£250k - £925k @ 5%', value: band1 });
+                breakdown.push({ label: '£925k - £1.5M @ 10%', value: band2 });
+            } else {
+                const band1 = 675000 * 0.05;
+                const band2 = 575000 * 0.10;
+                const band3 = (price - 1500000) * 0.12;
+                total = band1 + band2 + band3;
+                breakdown.push({ label: '£0 - £250k @ 0%', value: 0 });
+                breakdown.push({ label: '£250k - £925k @ 5%', value: band1 });
+                breakdown.push({ label: '£925k - £1.5M @ 10%', value: band2 });
+                breakdown.push({ label: 'Over £1.5M @ 12%', value: band3 });
+            }
+        }
+    } else if (period === '2021-2022') {
+        // Rates from 1st Oct 2021 - 23rd Sep 2022
+        // Standard rates (Individual Moving Home uses these)
+        if (firstTimeBuyer && price <= 500000) {
+            // First-time buyer relief
+            if (price <= 300000) {
+                total = 0;
+                breakdown.push({ label: '£0 - £300k @ 0%', value: 0 });
+            } else {
+                const band1 = (price - 300000) * 0.05;
+                total = band1;
+                breakdown.push({ label: '£0 - £300k @ 0%', value: 0 });
+                breakdown.push({ label: '£300k - £500k @ 5%', value: band1 });
+            }
+        } else {
+            // Standard rates
+            if (price <= 125000) {
+                total = 0;
+                breakdown.push({ label: '£0 - £125k @ 0%', value: 0 });
+            } else if (price <= 250000) {
+                const band1 = (price - 125000) * 0.02;
+                total = band1;
+                breakdown.push({ label: '£0 - £125k @ 0%', value: 0 });
+                breakdown.push({ label: '£125k - £250k @ 2%', value: band1 });
+            } else if (price <= 925000) {
+                const band1 = 125000 * 0.02;
+                const band2 = (price - 250000) * 0.05;
+                total = band1 + band2;
+                breakdown.push({ label: '£0 - £125k @ 0%', value: 0 });
+                breakdown.push({ label: '£125k - £250k @ 2%', value: band1 });
+                breakdown.push({ label: '£250k - £925k @ 5%', value: band2 });
+            } else if (price <= 1500000) {
+                const band1 = 125000 * 0.02;
+                const band2 = 675000 * 0.05;
+                const band3 = (price - 925000) * 0.10;
+                total = band1 + band2 + band3;
+                breakdown.push({ label: '£0 - £125k @ 0%', value: 0 });
+                breakdown.push({ label: '£125k - £250k @ 2%', value: band1 });
+                breakdown.push({ label: '£250k - £925k @ 5%', value: band2 });
+                breakdown.push({ label: '£925k - £1.5M @ 10%', value: band3 });
+            } else {
+                const band1 = 125000 * 0.02;
+                const band2 = 675000 * 0.05;
+                const band3 = 575000 * 0.10;
+                const band4 = (price - 1500000) * 0.12;
+                total = band1 + band2 + band3 + band4;
+                breakdown.push({ label: '£0 - £125k @ 0%', value: 0 });
+                breakdown.push({ label: '£125k - £250k @ 2%', value: band1 });
+                breakdown.push({ label: '£250k - £925k @ 5%', value: band2 });
+                breakdown.push({ label: '£925k - £1.5M @ 10%', value: band3 });
+                breakdown.push({ label: 'Over £1.5M @ 12%', value: band4 });
+            }
+        }
+    } else if (period === '2021-mid') {
+        // Rates from 1st Jul 2021 - 30th Sep 2021
+        // Standard rates (Individual Moving Home uses these)
+        if (firstTimeBuyer && price <= 500000) {
+            // First-time buyer relief
+            if (price <= 300000) {
+                total = 0;
+                breakdown.push({ label: '£0 - £300k @ 0%', value: 0 });
+            } else {
+                const band1 = (price - 300000) * 0.05;
+                total = band1;
+                breakdown.push({ label: '£0 - £300k @ 0%', value: 0 });
+                breakdown.push({ label: '£300k - £500k @ 5%', value: band1 });
+            }
+        } else {
+            // Standard rates
+            if (price <= 250000) {
+                total = 0;
+                breakdown.push({ label: '£0 - £250k @ 0%', value: 0 });
+            } else if (price <= 925000) {
+                const band1 = (price - 250000) * 0.05;
+                total = band1;
+                breakdown.push({ label: '£0 - £250k @ 0%', value: 0 });
+                breakdown.push({ label: '£250k - £925k @ 5%', value: band1 });
+            } else if (price <= 1500000) {
+                const band1 = 675000 * 0.05;
+                const band2 = (price - 925000) * 0.10;
+                total = band1 + band2;
+                breakdown.push({ label: '£0 - £250k @ 0%', value: 0 });
+                breakdown.push({ label: '£250k - £925k @ 5%', value: band1 });
+                breakdown.push({ label: '£925k - £1.5M @ 10%', value: band2 });
+            } else {
+                const band1 = 675000 * 0.05;
+                const band2 = 575000 * 0.10;
+                const band3 = (price - 1500000) * 0.12;
+                total = band1 + band2 + band3;
+                breakdown.push({ label: '£0 - £250k @ 0%', value: 0 });
+                breakdown.push({ label: '£250k - £925k @ 5%', value: band1 });
+                breakdown.push({ label: '£925k - £1.5M @ 10%', value: band2 });
+                breakdown.push({ label: 'Over £1.5M @ 12%', value: band3 });
+            }
+        }
+    }
+    
+    // Apply overseas buyer surcharge (2% on entire purchase price) - applies to all periods
+    if (overseasBuyer) {
+        const surcharge = price * 0.02;
+        total += surcharge;
+        breakdown.push({ label: 'Overseas Buyer Surcharge (2%)', value: surcharge });
+    }
+    
+    // Note: Individual Moving Home uses standard rates (already calculated above)
+    // No additional calculation needed for individualMoving - it's just a flag
+    
+    return total;
+}
+
+function calculateBRRValues(calculatorType) {
+    // Get all input values
+    const purchasePrice = parseCurrency(document.getElementById(`${calculatorType}_purchase_price`)?.value || '0');
+    const refurbCost = parseCurrency(document.getElementById(`${calculatorType}_refurb_cost`)?.value || '0');
+    const estimatedMarketValue = parseCurrency(document.getElementById(`${calculatorType}_estimated_market_value`)?.value || '0');
+    const monthlyRent = parseCurrency(document.getElementById(`${calculatorType}_monthly_rent`)?.value || '0');
+    const bridgingInterest = parseCurrency(document.getElementById(`${calculatorType}_bridging_interest`)?.value || '0');
+    const vacantPeriod = parseFloat(document.getElementById(`${calculatorType}_vacant_period`)?.value || '0');
+    const appreciation = parseFloat(document.getElementById(`${calculatorType}_appreciation`)?.value?.replace('%', '') || '5.5');
+    
+    // Get financing type
+    const hiddenInput = document.getElementById(`${calculatorType}_financing_type_hidden`);
+    const financingType = hiddenInput?.value || 'bridging';
+    const includeInBridgingBtn = document.getElementById(`${calculatorType}_include_in_bridging`);
+    const includeInBridging = includeInBridgingBtn?.classList.contains('pe-toggle-button-active') || false;
+    
+    // Calculate stamp duty based on selected period and buyer type
+    const stampDutyPeriod = document.getElementById(`${calculatorType}_stamp_duty_period`)?.value || 'current';
+    const individualMovingBtn = document.getElementById(`${calculatorType}_individual_moving`);
+    const firstTimeBuyerBtn = document.getElementById(`${calculatorType}_first_time_buyer`);
+    const overseasBuyerBtn = document.getElementById(`${calculatorType}_overseas_buyer`);
+    const individualMoving = individualMovingBtn?.classList.contains('pe-option-button-active') || false;
+    const firstTimeBuyer = firstTimeBuyerBtn?.classList.contains('pe-option-button-active') || false;
+    const overseasBuyer = overseasBuyerBtn?.classList.contains('pe-option-button-active') || false;
+    
+    let stampDuty = 0;
+    let breakdown = [];
+    
+    // Show/hide stamp duty field based on selection
+    const stampDutyField = document.getElementById(`${calculatorType}_stamp_duty`)?.closest('.pe-field');
+    if (stampDutyPeriod === 'none') {
+        if (stampDutyField) stampDutyField.style.display = 'none';
+        const breakdownEl = document.getElementById(`${calculatorType}_stamp_duty_breakdown`);
+        if (breakdownEl) breakdownEl.style.display = 'none';
+    } else {
+        if (stampDutyField) stampDutyField.style.display = 'block';
+        // Only calculate if purchase price is valid
+        // For investment calculators (BRR, BTL, etc.), assume it's an additional property (buy-to-let/second home)
+        // which uses higher stamp duty rates
+        // BUT: If "Individual Moving Home" is checked, use standard residential rates instead
+        let isAdditionalProperty = calculatorType !== 'purchase'; // Investment properties are typically additional properties
+        if (individualMoving) {
+            // Individual Moving Home uses standard residential rates (not additional property rates)
+            isAdditionalProperty = false;
+        }
+        if (purchasePrice > 0) {
+            stampDuty = calculateStampDuty(purchasePrice, stampDutyPeriod, individualMoving, firstTimeBuyer, overseasBuyer, breakdown, isAdditionalProperty);
+        } else {
+            stampDuty = 0;
+            breakdown.length = 0;
+        }
+        
+        // Update breakdown display
+        const breakdownEl = document.getElementById(`${calculatorType}_stamp_duty_breakdown`);
+        if (breakdownEl && breakdown.length > 0) {
+            breakdownEl.style.display = 'block';
+            breakdownEl.innerHTML = breakdown.map(item => 
+                `<div class="pe-breakdown-row">
+                    <span class="pe-breakdown-label">${item.label}</span>
+                    <span class="pe-breakdown-value">${formatCurrency(item.value)}</span>
+                </div>`
+            ).join('') + `<div class="pe-breakdown-row pe-breakdown-total">
+                    <span class="pe-breakdown-label">Total</span>
+                    <span class="pe-breakdown-value">${formatCurrency(stampDuty)}</span>
+                </div>`;
+        } else if (breakdownEl) {
+            breakdownEl.style.display = 'none';
+        }
+    }
+    
+    // Calculate initial mortgage based on financing type
+    let initialMortgage = 0;
+    if (financingType === 'mortgage') {
+        initialMortgage = purchasePrice * 0.75; // 75% LTV
+    } else if (financingType === 'bridging') {
+        initialMortgage = purchasePrice * 0.75; // 75% LTV bridging
+    }
+    // Cash = 0 mortgage
+    
+    // Total investment (deposit + stamp duty + refurb cost)
+    const deposit = purchasePrice - initialMortgage;
+    const totalInvestment = deposit + stampDuty + refurbCost;
+    
+    // Refinance calculations
+    const refinanceLTV = 75; // Default 75% LTV
+    const refinanceAmount = estimatedMarketValue * (refinanceLTV / 100);
+    const lockedInEquity = estimatedMarketValue - refinanceAmount;
+    const moneyBack = refinanceAmount - initialMortgage;
+    const moneyLeftIn = totalInvestment - moneyBack;
+    
+    // Ideal purchase price (simplified - would need target ROI)
+    const idealPurchasePrice = estimatedMarketValue * 0.7; // Rough estimate
+    
+    // Rental calculations
+    const annualRent = monthlyRent * 12;
+    const grossYield = estimatedMarketValue > 0 ? (annualRent / estimatedMarketValue) * 100 : 0;
+    
+    // Expenses
+    const mortgageRate = 5.8; // Default
+    const annualMortgageInterest = refinanceAmount * (mortgageRate / 100);
+    const monthlyMortgagePayment = refinanceAmount * (mortgageRate / 100) / 12;
+    
+    // Bridging costs (only if bridging finance)
+    let bridgingCost = 0;
+    if (financingType === 'bridging') {
+        bridgingCost = bridgingInterest * vacantPeriod;
+    }
+    
+    // Annual expenses (mortgage interest + bridging costs)
+    const totalAnnualExpenses = annualMortgageInterest + bridgingCost;
+    const annualProfit = annualRent - totalAnnualExpenses;
+    const monthlyProfit = annualProfit / 12;
+    
+    // ROI calculations
+    const roi = moneyLeftIn > 0 ? (annualProfit / moneyLeftIn) * 100 : 0;
+    const roce = totalInvestment > 0 ? (annualProfit / totalInvestment) * 100 : 0;
+    const netYield = estimatedMarketValue > 0 ? (annualProfit / estimatedMarketValue) * 100 : 0;
+    
+    // Equity in 10 years
+    const futureValue = estimatedMarketValue * Math.pow(1 + appreciation / 100, 10);
+    const equity10Years = futureValue - refinanceAmount;
+    
+    // Update UI
+    updateElement(`${calculatorType}_stamp_duty`, formatCurrency(stampDuty));
+    updateElement(`${calculatorType}_total_investment`, formatCurrency(totalInvestment));
+    updateElement(`${calculatorType}_estimated_market_value`, formatCurrency(estimatedMarketValue));
+    updateElement(`${calculatorType}_mortgage_payments`, formatCurrency(monthlyMortgagePayment));
+    updateElement(`${calculatorType}_locked_in_equity`, formatCurrency(lockedInEquity));
+    updateElement(`${calculatorType}_money_left_in`, formatCurrency(moneyLeftIn));
+    updateElement(`${calculatorType}_ideal_purchase_price`, formatCurrency(idealPurchasePrice));
+    updateElement(`${calculatorType}_gross_yield`, grossYield > 0 ? grossYield.toFixed(2) + '%' : '-');
+    updateElement(`${calculatorType}_total_annual_expenses`, formatCurrency(totalAnnualExpenses));
+    updateElement(`${calculatorType}_annual_profit`, formatCurrency(annualProfit));
+    updateElement(`${calculatorType}_monthly_profit`, formatCurrency(monthlyProfit));
+    updateElement(`${calculatorType}_roi`, roi > 0 ? roi.toFixed(2) + '%' : '-%');
+    updateElement(`${calculatorType}_roce`, roce > 0 ? roce.toFixed(2) + '%' : '-%');
+    updateElement(`${calculatorType}_gross_yield_metric`, grossYield > 0 ? grossYield.toFixed(2) + '%' : '-%');
+    updateElement(`${calculatorType}_net_yield`, netYield > 0 ? netYield.toFixed(2) + '%' : '-%');
+    updateElement(`${calculatorType}_equity_10_years`, formatCurrency(equity10Years));
+}
+
+function updateElement(id, value) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    
+    if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+        el.value = value;
+    } else {
+        el.textContent = value;
+    }
+}
+
+function parseCurrency(value) {
+    if (!value) return 0;
+    const cleaned = String(value).replace(/[£,\s%]/g, '');
+    return parseFloat(cleaned) || 0;
+}
+
+function formatCurrency(value) {
+    return `£${value.toLocaleString('en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+}
+
 function showCalculatorFields(selectedCalculators) {
     const fieldsContainer = document.getElementById('calculator-fields-list');
     const calculatorSection = document.getElementById('calculator-fields-container');
@@ -1682,105 +3058,128 @@ function showCalculatorFields(selectedCalculators) {
         const config = calculatorConfigs[calculatorType];
         if (!config) return;
         
-        // Create section for this calculator
-        const section = document.createElement('div');
-        section.className = 'calculator-fields-section';
-        section.dataset.calculator = calculatorType;
-        
-        const title = document.createElement('h3');
-        title.textContent = config.title;
-        section.appendChild(title);
-        
-        const fieldsGrid = document.createElement('div');
-        fieldsGrid.className = 'form-grid';
-        
-        config.fields.forEach(field => {
-            // Create unique ID for this calculator's field
-            const uniqueId = `${calculatorType}_${field.id}`;
+        // Special handling for BRR calculator - use PropertyEngine style
+        if (calculatorType === 'brr') {
+            const brrSection = createBRRCalculator(calculatorType);
+            fieldsContainer.appendChild(brrSection);
             
-            const label = document.createElement('label');
-            label.textContent = field.label + (field.required ? ' *' : '');
-            label.setAttribute('for', uniqueId);
-            
-            let input;
-            if (field.type === 'currency') {
-                input = document.createElement('input');
-                input.type = 'text';
-                input.id = uniqueId;
-                input.dataset.originalId = field.id;
-                input.dataset.calculator = calculatorType;
-                input.placeholder = 'e.g., £1,000';
-                input.pattern = '[£0-9,.]*';
-            } else if (field.type === 'number') {
-                input = document.createElement('input');
-                input.type = 'number';
-                input.id = uniqueId;
-                input.dataset.originalId = field.id;
-                input.dataset.calculator = calculatorType;
-                input.step = '0.01';
-                input.placeholder = 'e.g., 20';
-            } else {
-                input = document.createElement('input');
-                input.type = 'text';
-                input.id = uniqueId;
-                input.dataset.originalId = field.id;
-                input.dataset.calculator = calculatorType;
+            // Populate with mock data if available
+            if (window.mockDataStore) {
+                setTimeout(() => {
+                    const mockData = window.mockDataStore;
+                    const setValue = (id, value) => {
+                        const el = document.getElementById(id);
+                        if (el && value) el.value = value;
+                    };
+                    
+                    setValue(`${calculatorType}_purchase_price`, mockData.purchase_price);
+                    setValue(`${calculatorType}_refurb_cost`, mockData.refurb_cost);
+                    setValue(`${calculatorType}_estimated_market_value`, mockData.after_refurb_value || '£350,000');
+                    setValue(`${calculatorType}_monthly_rent`, mockData.monthly_rent);
+                    setValue(`${calculatorType}_bridging_interest`, mockData.bridging_interest);
+                    setValue(`${calculatorType}_vacant_period`, mockData.vacant_period);
+                    
+                    calculateBRRValues(calculatorType);
+                }, 200);
             }
+        } else {
+            // Standard calculator rendering for other types
+            const section = document.createElement('div');
+            section.className = 'calculator-fields-section';
+            section.dataset.calculator = calculatorType;
             
-            if (field.required) {
-                input.required = true;
-            }
+            const title = document.createElement('h3');
+            title.textContent = config.title;
+            section.appendChild(title);
             
-            fieldsGrid.appendChild(label);
-            fieldsGrid.appendChild(input);
-        });
-        
-        section.appendChild(fieldsGrid);
-        fieldsContainer.appendChild(section);
-        
-        // Populate with mock data
-        if (window.mockDataStore) {
-            const calculatorOverrides = {
-                'holiday-let': {
-                    'occupancy_rate': '65',
-                    'management_fee': '20'
-                },
-                'rent-to-hmo': {
-                    'occupancy_rate': '80',
-                    'management_fee': ''
-                },
-                'rent-to-serviced': {
-                    'occupancy_rate': '60',
-                    'management_fee': '18'
-                },
-                'flip': {
-                    // Flip-specific overrides if needed
-                },
-                'brr': {
-                    // BRR-specific overrides if needed
-                }
-            };
-            
-            const overrides = calculatorOverrides[calculatorType] || {};
+            const fieldsGrid = document.createElement('div');
+            fieldsGrid.className = 'form-grid';
             
             config.fields.forEach(field => {
+                // Create unique ID for this calculator's field
                 const uniqueId = `${calculatorType}_${field.id}`;
-                const input = document.getElementById(uniqueId);
-                if (input) {
-                    // First check calculator-specific overrides
-                    let value = overrides[field.id];
-                    
-                    // If no override, get from mock data store
-                    if (value === undefined || value === '') {
-                        value = window.mockDataStore[field.id];
-                    }
-                    
-                    // Set the value if it exists
-                    if (value !== undefined && value !== null && value !== '') {
-                        input.value = value;
-                    }
+                
+                const label = document.createElement('label');
+                label.textContent = field.label + (field.required ? ' *' : '');
+                label.setAttribute('for', uniqueId);
+                
+                let input;
+                if (field.type === 'currency') {
+                    input = document.createElement('input');
+                    input.type = 'text';
+                    input.id = uniqueId;
+                    input.dataset.originalId = field.id;
+                    input.dataset.calculator = calculatorType;
+                    input.placeholder = 'e.g., £1,000';
+                    input.pattern = '[£0-9,.]*';
+                } else if (field.type === 'number') {
+                    input = document.createElement('input');
+                    input.type = 'number';
+                    input.id = uniqueId;
+                    input.dataset.originalId = field.id;
+                    input.dataset.calculator = calculatorType;
+                    input.step = '0.01';
+                    input.placeholder = 'e.g., 20';
+                } else {
+                    input = document.createElement('input');
+                    input.type = 'text';
+                    input.id = uniqueId;
+                    input.dataset.originalId = field.id;
+                    input.dataset.calculator = calculatorType;
                 }
+                
+                if (field.required) {
+                    input.required = true;
+                }
+                
+                fieldsGrid.appendChild(label);
+                fieldsGrid.appendChild(input);
             });
+            
+            section.appendChild(fieldsGrid);
+            fieldsContainer.appendChild(section);
+            
+            // Populate with mock data
+            if (window.mockDataStore) {
+                const calculatorOverrides = {
+                    'holiday-let': {
+                        'occupancy_rate': '65',
+                        'management_fee': '20'
+                    },
+                    'rent-to-hmo': {
+                        'occupancy_rate': '80',
+                        'management_fee': ''
+                    },
+                    'rent-to-serviced': {
+                        'occupancy_rate': '60',
+                        'management_fee': '18'
+                    },
+                    'flip': {
+                        // Flip-specific overrides if needed
+                    }
+                };
+                
+                const overrides = calculatorOverrides[calculatorType] || {};
+                
+                config.fields.forEach(field => {
+                    const uniqueId = `${calculatorType}_${field.id}`;
+                    const input = document.getElementById(uniqueId);
+                    if (input) {
+                        // First check calculator-specific overrides
+                        let value = overrides[field.id];
+                        
+                        // If no override, get from mock data store
+                        if (value === undefined || value === '') {
+                            value = window.mockDataStore[field.id];
+                        }
+                        
+                        // Set the value if it exists
+                        if (value !== undefined && value !== null && value !== '') {
+                            input.value = value;
+                        }
+                    }
+                });
+            }
         }
     });
     

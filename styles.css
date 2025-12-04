@@ -463,3 +463,908 @@ body {
         padding: 16px;
     }
 }
+
+/* PropertyEngine Calculator Styles */
+.propertyengine-calculator {
+    background: #ffffff;
+    border-radius: 8px;
+    padding: 24px;
+    margin-bottom: 24px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.pe-calculator-topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.pe-calculator-title {
+    font-size: 24px;
+    font-weight: 600;
+    color: #111827;
+    margin: 0;
+}
+
+.pe-calculator-actions {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.pe-switch-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    color: #6b7280;
+    cursor: pointer;
+}
+
+.pe-switch-label input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+}
+
+.pe-btn-save {
+    padding: 8px 16px;
+    background-color: #1e3a8a;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.pe-btn-save:hover {
+    background-color: #1e40af;
+}
+
+.pe-roi-display {
+    background-color: #f3f4f6;
+    padding: 12px 20px;
+    border-radius: 6px;
+    text-align: center;
+    min-width: 180px;
+}
+
+.pe-roi-label {
+    font-size: 12px;
+    color: #6b7280;
+    margin-bottom: 4px;
+}
+
+.pe-roi-value {
+    font-size: 20px;
+    font-weight: 600;
+    color: #111827;
+}
+
+.pe-property-types {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 24px;
+}
+
+.pe-property-type {
+    padding: 8px 16px;
+    background-color: #f3f4f6;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #6b7280;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.pe-property-type:hover {
+    background-color: #e5e7eb;
+}
+
+.pe-property-type.active {
+    background-color: #1e3a8a;
+    color: white;
+    border-color: #1e3a8a;
+}
+
+.pe-calculator-content {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    margin-bottom: 24px;
+}
+
+.pe-calculator-left,
+.pe-calculator-right {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+.pe-section {
+    background-color: #f9fafb;
+    padding: 16px;
+    border-radius: 6px;
+    border: 1px solid #e5e7eb;
+}
+
+.pe-section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.pe-section-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #111827;
+    margin: 0;
+}
+
+.pe-toggle {
+    position: relative;
+    display: inline-block;
+    width: 44px;
+    height: 24px;
+    cursor: pointer;
+}
+
+.pe-toggle-input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.pe-toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #cbd5e1;
+    transition: 0.3s;
+    border-radius: 24px;
+}
+
+.pe-toggle-slider:before {
+    position: absolute;
+    content: "";
+    height: 18px;
+    width: 18px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: 0.3s;
+    border-radius: 50%;
+}
+
+.pe-toggle-input:checked + .pe-toggle-slider {
+    background-color: #1e3a8a;
+}
+
+.pe-toggle-input:checked + .pe-toggle-slider:before {
+    transform: translateX(20px);
+}
+
+.pe-section-content {
+    display: block;
+}
+
+.pe-field {
+    margin-bottom: 16px;
+}
+
+.pe-field:last-child {
+    margin-bottom: 0;
+}
+
+/* Fields with label beside content (like Type with radio buttons) */
+.pe-field.pe-field-inline {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+}
+
+.pe-field-label {
+    display: block;
+    font-size: 14px;
+    font-weight: 500;
+    color: #374151;
+    margin-bottom: 6px;
+}
+
+/* Label beside content layout */
+.pe-field.pe-field-inline .pe-field-label {
+    margin-bottom: 0;
+    min-width: 140px;
+    flex-shrink: 0;
+    padding-top: 4px;
+}
+
+.pe-field > .pe-input {
+    width: 100%;
+}
+
+.pe-field.pe-field-inline > .pe-radio-group,
+.pe-field.pe-field-inline > .pe-field-with-info,
+.pe-field.pe-field-inline > .pe-field-with-action {
+    flex: 1;
+}
+
+/* Ensure checkbox fields don't inherit inline layout */
+.pe-field.pe-field-checkbox {
+    display: block !important;
+    margin-bottom: 16px;
+}
+
+.pe-field.pe-field-checkbox .pe-checkbox-label {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    overflow: visible;
+}
+
+.pe-field.pe-field-checkbox .pe-checkbox-label span {
+    flex: 1;
+    min-width: 0;
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+}
+
+.pe-field-label.required::after {
+    content: " *";
+    color: #ef4444;
+}
+
+.pe-input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 14px;
+    color: #111827;
+    transition: border-color 0.2s;
+}
+
+.pe-input:focus {
+    outline: none;
+    border-color: #1e3a8a;
+    box-shadow: 0 0 0 3px rgba(30, 58, 138, 0.1);
+}
+
+.pe-input[readonly] {
+    background-color: #f3f4f6;
+    cursor: not-allowed;
+}
+
+.pe-input.pe-input-small {
+    width: 100px;
+}
+
+.pe-field-with-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.pe-field-with-info .pe-input {
+    flex: 1;
+}
+
+.pe-info-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background-color: #e5e7eb;
+    color: #6b7280;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: help;
+    flex-shrink: 0;
+}
+
+.pe-field-with-action {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.pe-field-with-action .pe-input {
+    flex: 1;
+}
+
+.pe-btn-detail {
+    padding: 6px 12px;
+    background-color: #ffffff;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    color: #374151;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+.pe-btn-remove {
+    padding: 6px 12px;
+    background-color: #fee2e2;
+    border: 1px solid #fca5a5;
+    border-radius: 6px;
+    font-size: 16px;
+    font-weight: 600;
+    color: #dc2626;
+    cursor: pointer;
+    transition: all 0.2s;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.pe-btn-remove:hover {
+    background-color: #fecaca;
+    border-color: #f87171;
+}
+
+.pe-btn-detail:hover {
+    background-color: #f9fafb;
+    border-color: #9ca3af;
+}
+
+.pe-radio-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.pe-radio {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    color: #374151;
+}
+
+.pe-radio input[type="radio"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+}
+
+/* Financing Type Buttons (Box Style) */
+.pe-financing-type-group {
+    display: flex;
+    gap: 8px;
+    flex: 1;
+}
+
+.pe-financing-type {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 16px;
+    background-color: #ffffff;
+    border: 2px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #374151;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+}
+
+.pe-financing-type:hover {
+    border-color: #9ca3af;
+    background-color: #f9fafb;
+}
+
+.pe-financing-type-active {
+    background-color: #eff6ff !important;
+    border-color: #3b82f6 !important;
+    color: #1e40af !important;
+}
+
+.pe-financing-check {
+    display: none;
+    font-size: 16px;
+    font-weight: 600;
+    color: #374151;
+}
+
+.pe-financing-type-active .pe-financing-check {
+    display: inline-block;
+}
+
+/* Toggle Button (for Include in Bridging Finance) */
+.pe-toggle-button {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 16px;
+    background-color: #ffffff;
+    border: 2px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #374151;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: center;
+}
+
+.pe-toggle-button:hover {
+    border-color: #9ca3af;
+    background-color: #f9fafb;
+}
+
+.pe-toggle-button-active {
+    background-color: #eff6ff !important;
+    border-color: #3b82f6 !important;
+    color: #1e40af !important;
+}
+
+.pe-toggle-button-check {
+    display: none;
+    font-size: 16px;
+    font-weight: 600;
+    color: #1e40af;
+}
+
+.pe-toggle-button-active .pe-toggle-button-check {
+    display: inline-block;
+}
+
+.pe-toggle-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed !important;
+    pointer-events: none;
+}
+
+/* Field Header with Toggle */
+.pe-field-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.pe-field-header .pe-field-label {
+    margin-bottom: 0;
+}
+
+.pe-toggle-expand {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px 8px;
+    color: #6b7280;
+    font-size: 12px;
+    transition: color 0.2s;
+}
+
+.pe-toggle-expand:hover {
+    color: #111827;
+}
+
+.pe-toggle-expand-icon {
+    display: inline-block;
+    transition: transform 0.2s;
+    font-size: 10px;
+}
+
+/* Stamp Duty Container */
+.pe-stamp-duty-container {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 8px;
+}
+
+.pe-select {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 14px;
+    color: #111827;
+    background-color: #ffffff;
+    cursor: pointer;
+    transition: border-color 0.2s;
+}
+
+.pe-select:focus {
+    outline: none;
+    border-color: #1e3a8a;
+    box-shadow: 0 0 0 3px rgba(30, 58, 138, 0.1);
+}
+
+/* Stamp Duty Sections */
+.pe-stamp-duty-section {
+    margin-bottom: 16px;
+}
+
+.pe-stamp-duty-section:last-child {
+    margin-bottom: 0;
+}
+
+.pe-stamp-duty-section-label {
+    display: block;
+    font-size: 12px;
+    font-weight: 500;
+    color: #6b7280;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.pe-stamp-duty-options {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.pe-option-button {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    background-color: #ffffff;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 400;
+    color: #374151;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: left;
+}
+
+.pe-option-button:hover {
+    border-color: #9ca3af;
+    background-color: #f9fafb;
+}
+
+.pe-option-button-active {
+    background-color: #eff6ff !important;
+    border-color: #3b82f6 !important;
+    color: #1e40af !important;
+    font-weight: 500;
+}
+
+.pe-option-check {
+    display: none;
+    font-size: 14px;
+    font-weight: 600;
+    color: #1e40af;
+    flex-shrink: 0;
+    width: 18px;
+    text-align: center;
+}
+
+.pe-option-button-active .pe-option-check {
+    display: inline-block;
+}
+
+.pe-stamp-duty-breakdown {
+    margin-top: 12px;
+    padding: 12px;
+    background-color: #f9fafb;
+    border-radius: 6px;
+    border: 1px solid #e5e7eb;
+    font-size: 13px;
+}
+
+.pe-breakdown-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    font-size: 13px;
+}
+
+.pe-breakdown-row:not(:last-child):not(.pe-breakdown-total) {
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.pe-breakdown-total {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 2px solid #d1d5db;
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.pe-breakdown-label {
+    color: #6b7280;
+    flex: 1;
+}
+
+.pe-breakdown-value {
+    color: #111827;
+    font-weight: 500;
+    text-align: right;
+    min-width: 80px;
+}
+
+.pe-breakdown-total .pe-breakdown-label,
+.pe-breakdown-total .pe-breakdown-value {
+    color: #111827;
+    font-weight: 600;
+}
+
+.pe-checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    color: #374151;
+    margin: 0;
+}
+
+.pe-checkbox {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.pe-link-add {
+    display: inline-block;
+    margin-top: 8px;
+    font-size: 14px;
+    color: #1e3a8a;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.pe-link-add:hover {
+    text-decoration: underline;
+}
+
+.pe-metrics {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding-top: 24px;
+    border-top: 1px solid #e5e7eb;
+}
+
+.pe-metrics-short {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+}
+
+.pe-metrics-long {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 16px;
+}
+
+.pe-metrics-appreciation {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.pe-metrics-appreciation .pe-field-label {
+    margin-bottom: 0;
+    white-space: nowrap;
+}
+
+.pe-metric-box {
+    background-color: #f3f4f6;
+    padding: 16px;
+    border-radius: 6px;
+    border: 1px solid #e5e7eb;
+    position: relative;
+}
+
+.pe-metric-box-blue {
+    background-color: #eff6ff;
+    border-color: #bfdbfe;
+}
+
+.pe-metric-label {
+    font-size: 12px;
+    color: #6b7280;
+    margin-bottom: 8px;
+}
+
+.pe-metric-value {
+    font-size: 20px;
+    font-weight: 600;
+    color: #111827;
+}
+
+.pe-metric-box .pe-info-icon {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+}
+
+@media (max-width: 1024px) {
+    .pe-calculator-content {
+        grid-template-columns: 1fr;
+    }
+    
+    .pe-metrics-short {
+        grid-template-columns: 1fr;
+    }
+    
+    .pe-calculator-topbar {
+        flex-direction: column;
+        gap: 16px;
+    }
+    
+    .pe-calculator-actions {
+        width: 100%;
+        justify-content: space-between;
+    }
+}
+
+/* Subsection styles for detailed view */
+.pe-subsection {
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid #e0e0e0;
+}
+
+.pe-subsection-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 15px;
+}
+
+/* Threshold Settings Modal */
+.pe-threshold-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+    margin: 0;
+    padding: 0;
+    overflow: auto;
+}
+
+.pe-threshold-modal-content {
+    background-color: #ffffff;
+    border-radius: 8px;
+    padding: 24px;
+    max-width: 500px;
+    width: 90%;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+.pe-threshold-header {
+    margin-bottom: 20px;
+}
+
+.pe-threshold-header h3 {
+    font-size: 14px;
+    font-weight: 500;
+    color: #374151;
+    line-height: 1.5;
+    margin: 0;
+}
+
+.pe-threshold-settings {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.pe-threshold-option-group {
+    display: flex;
+    gap: 8px;
+}
+
+.pe-threshold-option {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 16px;
+    background-color: #ffffff;
+    border: 2px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #374151;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.pe-threshold-option:hover {
+    border-color: #9ca3af;
+    background-color: #f9fafb;
+}
+
+.pe-threshold-option-active {
+    background-color: #eff6ff !important;
+    border-color: #3b82f6 !important;
+    color: #1e40af !important;
+}
+
+.pe-threshold-option .pe-financing-check {
+    display: none;
+}
+
+.pe-threshold-option-active .pe-financing-check {
+    display: inline-block;
+}
+
+.pe-threshold-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+/* Bridging Set-up Fee Toggle */
+.pe-toggle-group {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.pe-toggle-small {
+    padding: 6px 12px;
+    background-color: #ffffff;
+    border: 2px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    color: #374151;
+    cursor: pointer;
+    transition: all 0.2s;
+    min-width: 40px;
+}
+
+.pe-toggle-small:hover {
+    border-color: #9ca3af;
+    background-color: #f9fafb;
+}
+
+.pe-toggle-small-active {
+    background-color: #eff6ff !important;
+    border-color: #3b82f6 !important;
+    color: #1e40af !important;
+}
