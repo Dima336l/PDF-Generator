@@ -1,241 +1,272 @@
-<<<<<<< HEAD
-# Property PDF Builder - Desktop Application
+# Property Investment Report Builder - Frontend
 
-A professional desktop application that automatically generates property PDFs with images and property details. Available for both **macOS** and **Windows**.
+A modern web application for generating professional property investment reports with detailed calculations, location data, and visual content.
 
 ## Features
 
-- **Native Desktop App**: Proper `.app` bundle for Mac or `.exe` for Windows
-- **Easy-to-use GUI**: Clean interface built with tkinter
-- **Property Information Forms**: Input fields for address, property type, bedrooms, bathrooms, square footage, price, and description
-- **Image Management**: Add multiple property images with drag-and-drop ordering
-- **Live Preview**: See how your PDF will look before generating
-- **Professional PDF Output**: Clean, formatted PDFs with tables, images, and proper styling
-- **Cross-Platform**: Works on both macOS and Windows
+- **Multi-Calculator Support**: Select and configure multiple investment calculators:
+  - Standard Buy to Let
+  - Buy Refurbish Refinance (BRR)
+  - Flip
+  - Holiday Let
+  - Rent to HMO
+  - Rent to Serviced Accommodation
+  - Purchase
+
+- **Automatic Location Data**: Fetch location information with one click:
+  - City information and population
+  - Nearest train station and distance
+  - Nearest school and distance
+  - Local amenities
+  - City map generation
+  - City-specific images
+
+- **Image Management**: Organize property images across multiple categories:
+  - Cover page images
+  - Property gallery
+  - Floor plans
+  - City map
+  - City lifestyle images
+
+- **Property Information Forms**: Comprehensive input for:
+  - Property details (address, type, bedrooms, bathrooms, size, price)
+  - Investment calculations (multiple calculator types)
+  - EPC ratings and energy costs
+  - Broadband information
+
+- **Professional PDF Generation**: Generate detailed investment reports with:
+  - Property information pages
+  - Investment opportunity calculations with charts
+  - Key information and images
+  - EPC and broadband details
+  - City map and lifestyle images
 
 ## Quick Start
 
-### For macOS Users:
+### Prerequisites
 
-1. **Clone or download** this repository
-2. **Make the build script executable** (first time only):
+- Node.js (v14 or higher)
+- npm (comes with Node.js)
+
+### Local Development
+
+1. **Clone the repository**:
    ```bash
-   chmod +x build_macos_app.sh
+   git clone <repository-url>
+   cd Property-PDF
    ```
-3. **Run the build script**:
+
+2. **Install dependencies**:
    ```bash
-   ./build_macos_app.sh
+   npm install
    ```
-4. **Launch the app**:
+
+3. **Start the development server**:
    ```bash
-   open dist/PropertyPDFBuilder.app
+   npm start
    ```
    
-   Or double-click `dist/PropertyPDFBuilder.app` in Finder.
+   Or use the batch script (Windows):
+   ```cmd
+   start-local-dev.bat
+   ```
 
-**Note:** On first launch, macOS may show a security warning. Right-click the app and select "Open" to bypass Gatekeeper.
+4. **Open your browser**:
+   Navigate to `http://localhost:3000`
 
-**Creating a DMG for distribution:**
+### Running with Backend
+
+The frontend requires a backend API for PDF generation. The backend should be running on `http://localhost:8080` (or configured via environment variables).
+
+To run both frontend and backend together:
 ```bash
-hdiutil create -volname "Property PDF Builder" -srcfolder dist/PropertyPDFBuilder.app -ov -format UDZO dist/PropertyPDFBuilder.dmg
+npm run start:dev
 ```
 
-### Automated Builds (GitHub Actions)
+This will start:
+- Frontend web server on port 3000
+- Backend API server on port 8080
 
-**Build both Windows and macOS apps automatically from anywhere!**
-
-The repository includes GitHub Actions workflows that automatically build both platforms:
-
-1. **Push your code to GitHub** (if not already)
-2. **Go to Actions tab** in your GitHub repository
-3. **The workflow runs automatically** on every push to `main`
-   - Or click "Run workflow" to trigger manually
-4. **Download the artifacts** after build completes:
-   - **PropertyPDFBuilder-Windows** - Contains `PropertyPDFBuilder.exe`
-   - **PropertyPDFBuilder-macOS** - Contains `.app` bundle and `.dmg` installer
-
-**See `GITHUB_ACTIONS_SETUP.md` for detailed setup instructions.**
-
-### For Windows Users:
-
-1. **Clone or download** this repository
-2. **Run the build script**:
-   ```cmd
-   build_windows_app.bat
-   ```
-3. **Launch the app**:
-   ```cmd
-   dist\PropertyPDFBuilder.exe
-   ```
-
-## Manual Installation (Alternative)
-
-If you prefer to run from source:
-
-1. **Install Python** (3.7 or higher) from [python.org](https://python.org)
-
-2. **Create virtual environment**:
-   ```bash
-   python -m venv venv
-   ```
-
-3. **Activate virtual environment**:
-   - **macOS/Linux**: `source venv/bin/activate`
-   - **Windows**: `venv\Scripts\activate`
-
-4. **Install required packages**:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-5. **Run the application**:
-   - **macOS/Linux** (after activating venv):
-     ```bash
-     python pdf_builder_app.py
-     ```
-   - **Windows** (after activating venv):
-     ```cmd
-     python pdf_builder_app.py
-     ```
-   - **Windows** (without activating, use venv's Python directly):
-     ```cmd
-     venv\Scripts\python.exe pdf_builder_app.py
-     ```
-   
-   **Note**: Make sure your virtual environment is activated before running, or use the venv's Python directly. If you see "ModuleNotFoundError", you're likely using the global Python instead of the venv.
-
-## How to Use
-
-1. **Fill in Property Information**:
-   - Enter the property address
-   - Add postal code, property type, bedrooms, bathrooms, square footage, and price
-   - Write a description of the property
-
-2. **Add Images**:
-   - Click "Add Images" to select property photos
-   - Use "Move Up" and "Move Down" to reorder images
-   - Remove unwanted images with "Remove Selected"
-
-3. **Preview**:
-   - The preview section shows how your PDF will look
-   - Updates automatically as you type
-
-4. **Generate PDF**:
-   - Click "Generate PDF" to create your document
-   - Choose where to save the file
-   - The PDF will include all your information and images in a professional format
-
-## Supported Image Formats
-
-- JPEG (.jpg, .jpeg)
-- PNG (.png)
-- GIF (.gif)
-- BMP (.bmp)
-- TIFF (.tiff)
-
-## Distribution
-
-### macOS App Distribution:
-- The built `.app` file can be copied to `/Applications/`
-- Or create a DMG installer for distribution
-- The app is properly signed and notarized (if you have developer certificates)
-
-### Windows App Distribution:
-- The built `.exe` file is standalone and can be distributed
-- No additional dependencies required
-- Can be packaged in an installer using tools like Inno Setup
-
-## Customization
-
-The application is built with Python and can be easily customized:
-
-- **Modify the layout**: Edit the `create_widgets()` method
-- **Add new fields**: Extend the `fields` list in `create_widgets()`
-- **Change PDF styling**: Modify the styles in `create_pdf()`
-- **Add new features**: Extend the `PDFBuilderApp` class
-
-## File Structure
+## Project Structure
 
 ```
 Property-PDF/
-├── pdf_builder_app.py           # Main application file
-├── requirements.txt             # Python dependencies
-├── PropertyPDFBuilder.spec      # PyInstaller spec for macOS
-├── build_macos_app.sh          # macOS build script
-├── build_windows_app.bat       # Windows build script
-└── README.md                   # This file
+├── index.html              # Main HTML file
+├── renderer.js             # Frontend JavaScript logic
+├── styles.css              # Application styles
+├── calculator-logic.js     # Calculator logic (for reference)
+├── web-server.js           # Express web server
+├── logo.png                # Application logo
+├── sample_images/          # Sample property images
+├── package.json            # Dependencies and scripts
+├── start-local-dev.bat     # Windows development script
+└── .github/
+    └── workflows/
+        └── pages.yml       # GitHub Pages deployment
 ```
+
+## Available Scripts
+
+- `npm start` - Start the web server (port 3000)
+- `npm run start:dev` - Start both frontend and backend (requires backend folder)
+- `npm run start:electron` - Start Electron app (if needed)
+
+## Features in Detail
+
+### Calculator Selection
+
+Select one or more investment calculators from the Investment tab. Each calculator has its own set of input fields that are dynamically generated based on your selection.
+
+### Location Data Fetching
+
+Click "Fetch Location Data" in the Location tab to automatically populate:
+- City name
+- Distance to city centre
+- Nearest train station and distance
+- Nearest school and distance
+- Local amenities
+- City description and population
+- City map (generated automatically)
+- City-specific images (fetched from Pexels API)
+
+### Image Management
+
+Add images to different sections:
+- **Cover Page**: First image appears as hero photo, others as thumbnails
+- **Property Gallery**: General property photos
+- **Floor Plans**: Dedicated floor plan pages
+- **City Map**: Map of the capital city
+- **City Images**: Urban lifestyle shots
+
+Images can be reordered using "Move Up" and "Move Down" buttons.
+
+### PDF Generation
+
+Click "Generate Investment Report PDF" to create a comprehensive PDF report including:
+- Cover page with property images
+- Property information
+- Investment opportunity calculations (for each selected calculator)
+- Key information pages
+- EPC and broadband details
+- City map and lifestyle images
+
+## Configuration
+
+### Backend URL
+
+The frontend automatically detects the backend URL:
+- **Local development**: Uses `http://localhost:8080` when running locally
+- **Production**: Uses the production backend URL (configured in `renderer.js`)
+
+To change the backend URL, edit the `BACKEND_URL` constant in `renderer.js`.
+
+### Environment Variables
+
+For local development, you can set:
+- `PORT` - Web server port (default: 3000)
+- `BACKEND_URL` - Backend API URL (default: auto-detected)
+
+## Deployment
+
+### GitHub Pages
+
+The application is automatically deployed to GitHub Pages on push to the `main` branch via GitHub Actions.
+
+The workflow:
+1. Builds the static site
+2. Copies necessary files to `public/` directory
+3. Deploys to GitHub Pages
+
+### Manual Deployment
+
+1. Build the static files:
+   ```bash
+   npm run build
+   ```
+
+2. Deploy the `public/` directory to your hosting service
+
+## Technologies Used
+
+- **Frontend**: HTML5, CSS3, Vanilla JavaScript
+- **Web Server**: Express.js
+- **PDF Generation**: Backend API (separate repository)
+- **Image Processing**: Browser APIs, Backend proxy
+- **Location Services**: 
+  - OpenStreetMap Nominatim (geocoding)
+  - Overpass API (stations, schools, amenities)
+  - Wikipedia API (city information)
+  - Pexels API (city images)
+
+## Browser Support
+
+- Chrome (latest)
+- Firefox (latest)
+- Safari (latest)
+- Edge (latest)
 
 ## Troubleshooting
 
-**Common Issues:**
+### Port Already in Use
 
-1. **"Module not found" errors**: Make sure you've installed all requirements with `pip install -r requirements.txt`
+If you see `EADDRINUSE` errors:
+- Windows: The `start-local-dev.bat` script automatically kills processes on ports 3000 and 8080
+- Manual: Kill the process using the port:
+  ```bash
+  # Windows
+  netstat -ano | findstr :3000
+  taskkill /PID <PID> /F
+  ```
 
-2. **Images not loading**: Check that image files are not corrupted and are in supported formats
+### Images Not Loading
 
-3. **PDF generation fails**: Ensure you have write permissions in the selected directory
+- Check browser console for CORS errors
+- Ensure backend proxy is running for external images
+- Verify image URLs are valid
 
-4. **Build fails**: Make sure you have PyInstaller installed and are using the correct build script for your platform
+### Calculator Fields Not Showing
 
-5. **App won't open on macOS**: You may need to right-click and select "Open" the first time, or go to System Preferences > Security & Privacy to allow the app
+- Ensure JavaScript is enabled
+- Check browser console for errors
+- Verify calculator selection checkboxes are checked
 
-## Technical Details
+### PDF Generation Fails
 
-- **GUI Framework**: tkinter (built into Python)
-- **PDF Generation**: reportlab library
-- **Image Processing**: Pillow (PIL)
-- **App Bundling**: PyInstaller
-- **File Format**: Standard PDF (A4 size)
-- **Platform Support**: macOS 10.13+, Windows 10+
+- Ensure backend API is running and accessible
+- Check backend URL configuration
+- Verify all required fields are filled
+- Check browser console and network tab for errors
+
+## Development
+
+### Adding New Calculators
+
+1. Add calculator configuration to `calculatorConfigs` in `renderer.js`
+2. Add calculation logic to backend `calculator-logic.js`
+3. Update PDF generator to handle new calculator type
+
+### Styling
+
+Styles are in `styles.css`. The application uses:
+- Flexbox for layouts
+- CSS Grid for form fields
+- Responsive design for mobile devices
 
 ## License
 
 This project is open source and available under the MIT License.
-=======
-# PDF-Generator-Backend
 
-Minimal Node/Express API that wraps the existing `pdf-generator.js` to produce the exact same PDF as the desktop/Electron app.
+## Related Repositories
 
-## Endpoints
+- **Backend**: [PDF-Generator-Backend](https://github.com/Dima336l/PDF-Generator-Backend) - Node.js/Express API for PDF generation
 
-- POST `/generate`  
-  Body (JSON):
-  ```json
-  {
-    "data": { "... form fields ..." },
-    "images": {
-      "cover": ["data:image/png;base64,..."],
-      "property": ["data:image/jpeg;base64,..."],
-      "floor_plans": [],
-      "directions": [],
-      "city": []
-    },
-    "logo_base64": "data:image/png;base64,..."
-  }
-  ```
-  Returns: `application/pdf` stream (attachment).
+## Contributing
 
-Notes:
-- Image arrays accept base64 data URLs. They are written to temp files and passed to the existing generator.
-- CORS is enabled for all origins by default; scope it as needed.
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Submit a pull request
 
-## Local run
+## Support
 
-```bash
-cd backend
-npm install
-npm start
-# POST http://localhost:8080/generate
-```
-
-## Deploy (Render)
-
-- Create a new Web Service, Node environment.
-- Build command: `npm install`
-- Start command: `npm start`
-- Expose port `8080`.
-- After deploy, POST to `https://<your-service>.onrender.com/generate`.
-
-
->>>>>>> fb76a1255f9263d795807ab96e2fc12d307fcdfc
+For issues and questions, please open an issue on GitHub.

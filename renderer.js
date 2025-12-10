@@ -1618,6 +1618,22 @@ function initializeCalculatorSelection() {
     const calculatorOptions = document.querySelectorAll('.calculator-option');
     const checkboxes = document.querySelectorAll('.calculator-checkbox input[type="checkbox"]');
     
+    // Set BRR (Buy Refurbish Refinance) as default selected calculator
+    // Unselect all other calculators first
+    checkboxes.forEach(checkbox => {
+        if (checkbox.dataset.calculator !== 'brr') {
+            checkbox.checked = false;
+        }
+    });
+    
+    const brrCheckbox = document.querySelector('input[data-calculator="brr"]');
+    if (brrCheckbox) {
+        brrCheckbox.checked = true;
+    }
+    
+    // Trigger update to show BRR fields
+    updateCalculatorSelection();
+    
     // Handle checkbox clicks
     checkboxes.forEach(checkbox => {
         checkbox.addEventListener('change', (e) => {
@@ -1943,7 +1959,7 @@ function createBRRCalculator(calculatorType) {
                     </div>
                     <div class="pe-field">
                         <label class="pe-field-label">Mortgage Interest Rate (APR)</label>
-                        <input type="text" class="pe-input" id="${calculatorType}_refinance_interest_rate" data-original-id="refinance_interest_rate" data-calculator="${calculatorType}" value="5.5 %">
+                        <input type="text" class="pe-input" id="${calculatorType}_refinance_interest_rate" data-original-id="refinance_interest_rate" data-calculator="${calculatorType}" placeholder="5.5 %">
                     </div>
                     <div class="pe-field pe-field-refinance-repayment" style="display: none;">
                         <label class="pe-field-label">Mortgage Term (Years)</label>
@@ -2095,6 +2111,20 @@ function createBRRCalculator(calculatorType) {
     
     // Add event listeners
     setupBRRCalculatorEvents(section, calculatorType);
+    
+    // Ensure critical fields have direct event listeners as a backup
+    // Do this after a short delay to ensure DOM is ready
+    setTimeout(() => {
+        const refinanceInterestRateInput = document.getElementById(`${calculatorType}_refinance_interest_rate`);
+        if (refinanceInterestRateInput) {
+            // Add direct event listeners (multiple events to catch all cases)
+            const triggerCalc = () => calculateBRRValues(calculatorType);
+            refinanceInterestRateInput.addEventListener('input', triggerCalc, { passive: true });
+            refinanceInterestRateInput.addEventListener('change', triggerCalc);
+            refinanceInterestRateInput.addEventListener('keyup', triggerCalc);
+            refinanceInterestRateInput.addEventListener('blur', triggerCalc);
+        }
+    }, 200);
     
     return section;
 }
@@ -2501,27 +2531,172 @@ function setupBRRCalculatorEvents(section, calculatorType) {
         });
     }
     
-    // Input change listeners for real-time calculation
-    const inputs = section.querySelectorAll('input[data-calculator="' + calculatorType + '"]');
-    inputs.forEach(input => {
-        input.addEventListener('input', () => {
-            calculateBRRValues(calculatorType);
+    // Use event delegation on the section to catch all input events
+    // This ensures it works even if fields are added dynamically
+    let calculationTimeout;
+    const triggerCalculation = () => {
+        clearTimeout(calculationTimeout);
+        // Use requestAnimationFrame to ensure DOM is updated before reading value
+        requestAnimationFrame(() => {
+            setTimeout(() => {
+                calculateBRRValues(calculatorType);
+            }, 10); // Small delay to ensure input value is processed
         });
-        input.addEventListener('change', () => {
-            calculateBRRValues(calculatorType);
-        });
-    });
+    };
     
-    // Also listen to purchase price input specifically (it might not have data-calculator attribute)
-    const purchasePriceInput = section.querySelector(`#${calculatorType}_purchase_price`);
-    if (purchasePriceInput) {
-        purchasePriceInput.addEventListener('input', () => {
-            calculateBRRValues(calculatorType);
-        });
-        purchasePriceInput.addEventListener('change', () => {
-            calculateBRRValues(calculatorType);
-        });
+    // Event delegation for all inputs in the section
+    section.addEventListener('input', (e) => {
+        const target = e.target;
+        if (target && target.tagName === 'INPUT' && !target.readOnly) {
+            const fieldId = target.id || '';
+            // SKIP the refinance interest rate field - it has its own handlers
+            if (fieldId === `${calculatorType}_refinance_interest_rate`) {
+                return; // Don't handle this field through delegation
+            }
+            if (fieldId.startsWith(calculatorType + '_') || target.hasAttribute('data-calculator')) {
+                triggerCalculation();
+            }
+        }
+    }, true); // Use capture phase to catch events early
+    
+    section.addEventListener('change', (e) => {
+        const target = e.target;
+        if (target && target.tagName === 'INPUT' && !target.readOnly) {
+            const fieldId = target.id || '';
+            // SKIP the refinance interest rate field - it has its own handlers
+            if (fieldId === `${calculatorType}_refinance_interest_rate`) {
+                return; // Don't handle this field through delegation
+            }
+            if (fieldId.startsWith(calculatorType + '_') || target.hasAttribute('data-calculator')) {
+                calculateBRRValues(calculatorType); // Immediate calculation on change
+            }
+        }
+    }, true);
+    
+    // Also add blur event for fields that might need it (like percentage inputs)
+    section.addEventListener('blur', (e) => {
+        const target = e.target;
+        if (target && target.tagName === 'INPUT' && !target.readOnly) {
+            const fieldId = target.id || '';
+            if (fieldId === `${calculatorType}_refinance_interest_rate` ||
+                fieldId === `${calculatorType}_refinance_ltv` ||
+                fieldId === `${calculatorType}_mortgage_interest_rate` ||
+                fieldId === `${calculatorType}_mortgage_ltv` ||
+                fieldId === `${calculatorType}_bridging_ltv`) {
+                calculateBRRValues(calculatorType);
+            }
+        }
+    }, true);
+    
+    // CRITICAL FIX: Use event delegation on document to handle input events
+    // This ensures listeners persist even when fields are recreated by showCalculatorFields
+    // Only set up once per calculator type using a flag
+    if (!window[`${calculatorType}_refinance_input_delegation_setup`]) {
+        window[`${calculatorType}_refinance_input_delegation_setup`] = true;
+        
+        // DEBUG: Log ALL input events to see if ANY are firing
+        document.addEventListener('input', (e) => {
+            console.log('🔍 ALL INPUT EVENT - target:', e.target?.id, 'value:', e.target?.value, 'type:', e.target?.type);
+            const target = e.target;
+            const fieldId = target?.id;
+            
+            // Handle refinance interest rate
+            if (fieldId === `${calculatorType}_refinance_interest_rate`) {
+                const typedValue = target.value;
+                console.log('📝 DELEGATED INPUT EVENT (REFINANCE) - User typed:', typedValue);
+                // Store the value in multiple places
+                target.setAttribute('data-user-value', typedValue);
+                window[`${calculatorType}_refinance_interest_rate_value`] = typedValue;
+                // Trigger calculation
+                setTimeout(() => calculateBRRValues(calculatorType), 50);
+            }
+            
+            // Handle mortgage interest rate (initial financing)
+            if (fieldId === `${calculatorType}_mortgage_interest_rate`) {
+                const typedValue = target.value;
+                console.log('📝 DELEGATED INPUT EVENT (MORTGAGE) - User typed:', typedValue);
+                // Store the value
+                target.setAttribute('data-user-value', typedValue);
+                window[`${calculatorType}_mortgage_interest_rate_value`] = typedValue;
+                // Trigger calculation
+                setTimeout(() => calculateBRRValues(calculatorType), 50);
+            }
+        }, true); // Use capture phase to catch early
+        
+        // Also handle beforeinput for earlier detection
+        document.addEventListener('beforeinput', (e) => {
+            console.log('🔵 ALL BEFOREINPUT - target:', e.target?.id, 'data:', e.data, 'inputType:', e.inputType);
+            const target = e.target;
+            if (target && target.id === `${calculatorType}_refinance_interest_rate`) {
+                console.log('🔵 DELEGATED BEFOREINPUT - data:', e.data, 'inputType:', e.inputType, 'target value:', target.value);
+            }
+        }, true);
+        
+        // Also listen for keydown/keyup to see if keys are being pressed
+        document.addEventListener('keydown', (e) => {
+            const target = e.target;
+            if (target && target.id === `${calculatorType}_refinance_interest_rate`) {
+                console.log('⌨️ KEYDOWN on refinance field - key:', e.key, 'code:', e.code, 'current value:', target.value);
+            }
+        }, true);
+        
+        document.addEventListener('keyup', (e) => {
+            const target = e.target;
+            if (target && target.id === `${calculatorType}_refinance_interest_rate`) {
+                console.log('⌨️ KEYUP on refinance field - key:', e.key, 'code:', e.code, 'current value:', target.value);
+            }
+        }, true);
+        
+        // Listen for focus/blur to see if field can receive focus
+        document.addEventListener('focus', (e) => {
+            const target = e.target;
+            if (target && target.id === `${calculatorType}_refinance_interest_rate`) {
+                console.log('👁️ FOCUS on refinance field - can receive input:', !target.readOnly && !target.disabled);
+            }
+        }, true);
+        
+        document.addEventListener('click', (e) => {
+            const target = e.target;
+            if (target && target.id === `${calculatorType}_refinance_interest_rate`) {
+                console.log('🖱️ CLICK on refinance field - can receive input:', !target.readOnly && !target.disabled, 'value:', target.value);
+            }
+        }, true);
     }
+    
+    // Initialize the field value when it's created
+    // This runs every time setupBRRCalculatorEvents is called (after field creation)
+    setTimeout(() => {
+        const refinanceInterestRateInput = document.getElementById(`${calculatorType}_refinance_interest_rate`);
+        if (refinanceInterestRateInput) {
+            console.log('✅ Found refinance interest rate input:', refinanceInterestRateInput.id);
+            
+            // CRITICAL: Remove the hardcoded value attribute to allow user input
+            refinanceInterestRateInput.removeAttribute('value');
+            
+            // Set initial value programmatically if empty
+            if (!refinanceInterestRateInput.value || refinanceInterestRateInput.value === '') {
+                refinanceInterestRateInput.value = '5.5 %';
+            }
+            
+            // Ensure it's editable
+            refinanceInterestRateInput.removeAttribute('readonly');
+            refinanceInterestRateInput.removeAttribute('disabled');
+            refinanceInterestRateInput.readOnly = false;
+            refinanceInterestRateInput.disabled = false;
+            
+            console.log('✅ Field initialized - value:', refinanceInterestRateInput.value, 'readonly:', refinanceInterestRateInput.readOnly, 'disabled:', refinanceInterestRateInput.disabled);
+        }
+        
+        const refinanceLTVInput = document.getElementById(`${calculatorType}_refinance_ltv`);
+        if (refinanceLTVInput) {
+            refinanceLTVInput.addEventListener('input', () => {
+                calculateBRRValues(calculatorType);
+            });
+            refinanceLTVInput.addEventListener('change', () => {
+                calculateBRRValues(calculatorType);
+            });
+        }
+    }, 100);
     
     // Add additional refinance cost functionality
     const addRefinanceCostLink = section.querySelector(`#${calculatorType}_add_refinance_cost`);
@@ -2963,6 +3138,9 @@ function calculateStampDuty(price, period, individualMoving, firstTimeBuyer, ove
 }
 
 function calculateBRRValues(calculatorType) {
+    // Debug: Log that calculation is being called
+    // console.log('calculateBRRValues called for:', calculatorType);
+    
     // Get all input values
     const purchasePrice = parseCurrency(document.getElementById(`${calculatorType}_purchase_price`)?.value || '0');
     const refurbCost = parseCurrency(document.getElementById(`${calculatorType}_refurb_cost`)?.value || '0');
@@ -3035,9 +3213,11 @@ function calculateBRRValues(calculatorType) {
     // Calculate initial mortgage based on financing type
     let initialMortgage = 0;
     if (financingType === 'mortgage') {
-        initialMortgage = purchasePrice * 0.75; // 75% LTV
+        const mortgageLTV = parseFloat(document.getElementById(`${calculatorType}_mortgage_ltv`)?.value?.replace(/[%\s]/g, '') || '75');
+        initialMortgage = purchasePrice * (mortgageLTV / 100);
     } else if (financingType === 'bridging') {
-        initialMortgage = purchasePrice * 0.75; // 75% LTV bridging
+        const bridgingLTV = parseFloat(document.getElementById(`${calculatorType}_bridging_ltv`)?.value?.replace(/[%\s]/g, '') || '75');
+        initialMortgage = purchasePrice * (bridgingLTV / 100);
     }
     // Cash = 0 mortgage
     
@@ -3045,24 +3225,190 @@ function calculateBRRValues(calculatorType) {
     const deposit = purchasePrice - initialMortgage;
     const totalInvestment = deposit + stampDuty + refurbCost;
     
-    // Refinance calculations
-    const refinanceLTV = 75; // Default 75% LTV
+    // Refinance calculations - read from input fields
+    const refinanceLTVValue = document.getElementById(`${calculatorType}_refinance_ltv`)?.value || '75 %';
+    const refinanceLTV = parseFloat(refinanceLTVValue.replace(/[%\s]/g, '')) || 75;
     const refinanceAmount = estimatedMarketValue * (refinanceLTV / 100);
     const lockedInEquity = estimatedMarketValue - refinanceAmount;
     const moneyBack = refinanceAmount - initialMortgage;
     const moneyLeftIn = totalInvestment - moneyBack;
     
-    // Ideal purchase price (simplified - would need target ROI)
-    const idealPurchasePrice = estimatedMarketValue * 0.7; // Rough estimate
+    // Debug: Log key values
+    console.log('calculateBRRValues - estimatedMarketValue:', estimatedMarketValue, 'refinanceAmount:', refinanceAmount, 'refinanceLTV:', refinanceLTV);
+    
+    // Ideal purchase price - calculate based on target ROI and interest rates
+    // This will be recalculated after we have the interest rates
+    let idealPurchasePrice = estimatedMarketValue * 0.7; // Initial estimate
     
     // Rental calculations
     const annualRent = monthlyRent * 12;
     const grossYield = estimatedMarketValue > 0 ? (annualRent / estimatedMarketValue) * 100 : 0;
     
-    // Expenses
-    const mortgageRate = 5.8; // Default
-    const annualMortgageInterest = refinanceAmount * (mortgageRate / 100);
-    const monthlyMortgagePayment = refinanceAmount * (mortgageRate / 100) / 12;
+    // Expenses - read mortgage interest rates from inputs
+    // IMPORTANT: Always read the current value directly from the DOM element
+    const initialInterestRateInput = document.getElementById(`${calculatorType}_mortgage_interest_rate`);
+    // CRITICAL: Read the ACTUAL current value from the input field
+    // ALWAYS prefer the live .value property as it reflects what the user is currently typing
+    let initialInterestRateValue = '5.5 %';
+    if (initialInterestRateInput) {
+        // Priority 1: Read the LIVE .value property (most reliable)
+        const liveValue = initialInterestRateInput.value || '';
+        
+        // Priority 2: Check stored user value (set by input event)
+        const storedUserValue = window[`${calculatorType}_mortgage_interest_rate_value`];
+        const dataUserValue = initialInterestRateInput.getAttribute('data-user-value');
+        
+        // Always use live value if available, otherwise fall back to stored values
+        if (liveValue && liveValue.trim() !== '') {
+            initialInterestRateValue = liveValue;
+        } else if (storedUserValue && storedUserValue !== '') {
+            initialInterestRateValue = storedUserValue;
+        } else if (dataUserValue && dataUserValue !== '') {
+            initialInterestRateValue = dataUserValue;
+        } else {
+            initialInterestRateValue = initialInterestRateInput.textContent || '5.5 %';
+        }
+        
+        // Debug logging
+        if (liveValue && liveValue !== '5.5 %') {
+            console.log('📊 Reading initial mortgage rate - liveValue:', liveValue, 'stored:', storedUserValue, 'data-attr:', dataUserValue, 'final:', initialInterestRateValue);
+        }
+    }
+    initialInterestRateValue = String(initialInterestRateValue).trim();
+    
+    const refinanceInterestRateInput = document.getElementById(`${calculatorType}_refinance_interest_rate`);
+    // CRITICAL: Read the ACTUAL current value from the input field
+    // ALWAYS prefer the live .value property as it reflects what the user is currently typing
+    let refinanceInterestRateValue = '';
+    if (refinanceInterestRateInput) {
+        // For input elements, ALWAYS use .value property (not .getAttribute('value'))
+        // .value is the LIVE value that reflects user input
+        if (refinanceInterestRateInput.tagName === 'INPUT' || refinanceInterestRateInput.tagName === 'TEXTAREA') {
+            // Priority 1: Read the LIVE .value property (most reliable)
+            const liveValue = refinanceInterestRateInput.value || '';
+            
+            // Priority 2: Check stored user value (set by input event)
+            const storedUserValue = window[`${calculatorType}_refinance_interest_rate_value`];
+            const dataUserValue = refinanceInterestRateInput.getAttribute('data-user-value');
+            
+            // Always use live value if available, otherwise fall back to stored values
+            if (liveValue && liveValue.trim() !== '') {
+                refinanceInterestRateValue = liveValue;
+            } else if (storedUserValue && storedUserValue !== '') {
+                refinanceInterestRateValue = storedUserValue;
+            } else if (dataUserValue && dataUserValue !== '') {
+                refinanceInterestRateValue = dataUserValue;
+            }
+            
+            // Debug logging
+            if (liveValue && liveValue !== '5.5 %') {
+                console.log('📊 Reading refinance rate - liveValue:', liveValue, 'stored:', storedUserValue, 'data-attr:', dataUserValue, 'final:', refinanceInterestRateValue);
+            }
+        } else {
+            refinanceInterestRateValue = refinanceInterestRateInput.textContent || '';
+        }
+    }
+    
+    // Clean and trim the value - preserve what user typed
+    refinanceInterestRateValue = String(refinanceInterestRateValue).trim();
+    
+    // Debug: Log what we read for refinance rate
+    if (refinanceInterestRateInput) {
+        console.log('📊 Reading refinance rate - liveValue:', refinanceInterestRateInput.value, 'stored:', window[`${calculatorType}_refinance_interest_rate_value`], 'data-attr:', refinanceInterestRateInput.getAttribute('data-user-value'), 'final:', refinanceInterestRateValue);
+    }
+    
+    // If empty, use initial rate as fallback
+    // This ensures that when user changes initial mortgage rate, it affects refinance calculations
+    // BUT: Don't use fallback if the field has focus (user is typing)
+    const isFocused = refinanceInterestRateInput && document.activeElement === refinanceInterestRateInput;
+    if ((!refinanceInterestRateValue || refinanceInterestRateValue === '' || refinanceInterestRateValue === '5.5 %') && !isFocused) {
+        // Use initial mortgage rate as refinance rate if refinance rate is not explicitly set
+        refinanceInterestRateValue = initialInterestRateValue;
+        console.log('⚠️ Refinance rate not set, using initial mortgage rate as fallback:', initialInterestRateValue);
+    }
+    
+    // Parse the interest rate - handle various formats: "5.5 %", "5.5%", "5.5", etc.
+    // Remove all non-numeric characters except decimal point
+    const initialMortgageRate = parseFloat(String(initialInterestRateValue).replace(/[£,%\s]/g, '')) || 5.5;
+    // Extract just the numeric part (handle cases like "533333333333333.333333333333333335 %")
+    const cleanedValue = String(refinanceInterestRateValue).replace(/[£,%\s]/g, '');
+    let refinanceMortgageRate = parseFloat(cleanedValue);
+    
+    // Debug: Log what we're parsing
+    console.log('🔢 Parsing rates - initialInterestRateValue:', initialInterestRateValue, 'parsed:', initialMortgageRate);
+    console.log('🔢 Parsing rates - refinanceInterestRateValue:', refinanceInterestRateValue, 'cleaned:', cleanedValue, 'parsed:', refinanceMortgageRate);
+    
+    // If parsing failed or resulted in NaN, use initial rate as fallback
+    if (isNaN(refinanceMortgageRate) || refinanceMortgageRate === 0) {
+        console.log('⚠️ Refinance rate parsing failed, using initial rate:', initialMortgageRate);
+        refinanceMortgageRate = initialMortgageRate;
+    }
+    
+    // Cap the interest rate at a reasonable maximum (e.g., 100%)
+    if (refinanceMortgageRate > 100) {
+        console.log('⚠️ Refinance rate capped at 100% (was:', refinanceMortgageRate, ')');
+        refinanceMortgageRate = 100;
+    }
+    
+    // Debug: Always log the final rates being used
+    console.log('✅ Final rates - initialMortgageRate:', initialMortgageRate, 'refinanceMortgageRate:', refinanceMortgageRate);
+    
+    // Check selected mortgage type (initial financing)
+    const repaymentBtnInitial = document.querySelector(`[data-mortgage-type="repayment"][data-calculator="${calculatorType}"]`);
+    const isInitialRepayment = repaymentBtnInitial?.classList.contains('pe-financing-type-active') || false;
+    const mortgageTermYearsInitial = parseFloat(document.getElementById(`${calculatorType}_mortgage_term_years`)?.value || '25');
+    
+    // Check refinance mortgage type
+    const refinanceRepaymentBtn = document.querySelector(`[data-refinance-mortgage-type="repayment"][data-calculator="${calculatorType}"]`);
+    const isRefinanceRepayment = refinanceRepaymentBtn?.classList.contains('pe-financing-type-active') || false;
+    const mortgageTermYearsRefi = parseFloat(document.getElementById(`${calculatorType}_refinance_mortgage_term_years`)?.value || '25');
+    
+    // Initial mortgage payments (drives on-screen "Mortgage Payments / pcm")
+    let monthlyMortgagePaymentInitial = 0;
+    if (initialMortgage > 0) {
+        const monthlyRateInitial = (initialMortgageRate / 100) / 12;
+        const numberOfPaymentsInitial = mortgageTermYearsInitial * 12;
+        
+        // Debug: Log initial mortgage payment calculation
+        console.log('💰 Initial Mortgage Payment Calc - initialMortgage:', initialMortgage, 'rate:', initialMortgageRate, 'monthlyRate:', monthlyRateInitial, 'isRepayment:', isInitialRepayment, 'termYears:', mortgageTermYearsInitial);
+        
+        if (isInitialRepayment && monthlyRateInitial > 0) {
+            monthlyMortgagePaymentInitial = initialMortgage * (monthlyRateInitial * Math.pow(1 + monthlyRateInitial, numberOfPaymentsInitial)) /
+                                            (Math.pow(1 + monthlyRateInitial, numberOfPaymentsInitial) - 1);
+        } else if (isInitialRepayment && monthlyRateInitial === 0) {
+            monthlyMortgagePaymentInitial = initialMortgage / numberOfPaymentsInitial;
+        } else {
+            // Interest-only
+            monthlyMortgagePaymentInitial = initialMortgage * (initialMortgageRate / 100) / 12;
+        }
+        
+        console.log('💰 Initial Mortgage Payment Result:', monthlyMortgagePaymentInitial);
+    }
+    
+    // Refinance mortgage payments (drives refinance payment display)
+    let monthlyMortgagePaymentRefi = 0;
+    let annualMortgageInterest = 0;
+    if (refinanceAmount > 0) {
+        const monthlyRateRefi = (refinanceMortgageRate / 100) / 12;
+        const numberOfPaymentsRefi = mortgageTermYearsRefi * 12;
+        
+        if (isRefinanceRepayment && monthlyRateRefi > 0) {
+            monthlyMortgagePaymentRefi = refinanceAmount * (monthlyRateRefi * Math.pow(1 + monthlyRateRefi, numberOfPaymentsRefi)) /
+                                         (Math.pow(1 + monthlyRateRefi, numberOfPaymentsRefi) - 1);
+            // Approximate first-year interest
+            annualMortgageInterest = refinanceAmount * (refinanceMortgageRate / 100);
+        } else if (isRefinanceRepayment && monthlyRateRefi === 0) {
+            monthlyMortgagePaymentRefi = refinanceAmount / numberOfPaymentsRefi;
+            annualMortgageInterest = 0;
+        } else {
+            // Interest-only
+            annualMortgageInterest = refinanceAmount * (refinanceMortgageRate / 100);
+            monthlyMortgagePaymentRefi = annualMortgageInterest / 12;
+        }
+    }
+    
+    // Debug: Log mortgage payment calculations
+    console.log('Mortgage Payment Calc - refinanceAmount:', refinanceAmount, 'rate:', refinanceMortgageRate, 'monthlyPayment:', monthlyMortgagePaymentRefi, 'annualInterest:', annualMortgageInterest);
     
     // Bridging costs (only if bridging finance)
     let bridgingCost = 0;
@@ -3088,7 +3434,20 @@ function calculateBRRValues(calculatorType) {
     updateElement(`${calculatorType}_stamp_duty`, formatCurrency(stampDuty));
     updateElement(`${calculatorType}_total_investment`, formatCurrency(totalInvestment));
     updateElement(`${calculatorType}_estimated_market_value`, formatCurrency(estimatedMarketValue));
-    updateElement(`${calculatorType}_mortgage_payments`, formatCurrency(monthlyMortgagePayment));
+    
+    // Update mortgage payments - update both the general field and the detailed field
+    updateElement(`${calculatorType}_mortgage_payments`, formatCurrency(monthlyMortgagePaymentInitial));
+    updateElement(`${calculatorType}_mortgage_payments_detailed`, formatCurrency(monthlyMortgagePaymentInitial));
+    
+    // Also update the financing payment field if it's showing mortgage payments (not bridging)
+    const financingTypeHidden = document.getElementById(`${calculatorType}_financing_type_hidden`);
+    const currentFinancingType = financingTypeHidden?.value || 'bridging';
+    if (currentFinancingType === 'mortgage') {
+        // When showing mortgage payments, update the bridging_interest field (which is reused for mortgage payments)
+        updateElement(`${calculatorType}_bridging_interest`, formatCurrency(monthlyMortgagePaymentInitial));
+    }
+    
+    updateElement(`${calculatorType}_refinance_mortgage_payments`, formatCurrency(monthlyMortgagePaymentRefi));
     updateElement(`${calculatorType}_locked_in_equity`, formatCurrency(lockedInEquity));
     updateElement(`${calculatorType}_money_left_in`, formatCurrency(moneyLeftIn));
     updateElement(`${calculatorType}_ideal_purchase_price`, formatCurrency(idealPurchasePrice));
@@ -3107,8 +3466,21 @@ function updateElement(id, value) {
     const el = document.getElementById(id);
     if (!el) return;
     
+    // Don't update input/textarea fields that are currently being edited (have focus)
+    // This prevents overwriting user input while they're typing
     if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
-        el.value = value;
+        // NEVER update the refinance interest rate field - it's user-editable
+        // Also check for mortgage interest rate fields
+        if (id.includes('refinance_interest_rate') || 
+            id.includes('mortgage_interest_rate') ||
+            id.endsWith('_interest_rate')) {
+            // These are user-editable fields - NEVER overwrite them
+            return;
+        }
+        // Only update if the element doesn't have focus (user isn't currently editing it)
+        if (document.activeElement !== el) {
+            el.value = value;
+        }
     } else {
         el.textContent = value;
     }
