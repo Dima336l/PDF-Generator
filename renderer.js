@@ -3221,20 +3221,94 @@ function calculateBRRValues(calculatorType) {
     }
     // Cash = 0 mortgage
     
-    // Total investment (deposit + stamp duty + refurb cost)
-    const deposit = purchasePrice - initialMortgage;
-    const totalInvestment = deposit + stampDuty + refurbCost;
+    // Read additional purchase costs
+    const surveyCostsValue = document.getElementById(`${calculatorType}_survey_costs`)?.value || '£ 500';
+    const surveyCosts = parseCurrency(surveyCostsValue);
     
-    // Refinance calculations - read from input fields
+    const legalFeesValue = document.getElementById(`${calculatorType}_legal_fees`)?.value || '£ 1,500';
+    const legalFees = parseCurrency(legalFeesValue);
+    
+    // Additional purchase costs (dynamically added)
+    let additionalPurchaseCosts = 0;
+    const additionalPurchaseCostInputs = document.querySelectorAll(`[id^="${calculatorType}_additional_purchase_cost_"]`);
+    additionalPurchaseCostInputs.forEach(input => {
+        const value = parseCurrency(input.value || '£ 0');
+        additionalPurchaseCosts += value;
+    });
+    
+    // Read mortgage set-up fee (for initial financing)
+    let mortgageSetupFee = 0;
+    if (financingType === 'mortgage') {
+        const mortgageSetupFeeValue = document.getElementById(`${calculatorType}_mortgage_setup_fee`)?.value || '£ 1,000';
+        // Check if it's a percentage or currency
+        if (mortgageSetupFeeValue.includes('%')) {
+            const percent = parseFloat(mortgageSetupFeeValue.replace(/[%\s]/g, '')) || 0;
+            mortgageSetupFee = initialMortgage * (percent / 100);
+        } else {
+            mortgageSetupFee = parseCurrency(mortgageSetupFeeValue);
+        }
+    } else if (financingType === 'bridging') {
+        const bridgingSetupFeeValue = document.getElementById(`${calculatorType}_bridging_setup_fee`)?.value || '1.75 %';
+        // Check if it's a percentage or currency
+        if (bridgingSetupFeeValue.includes('%')) {
+            const percent = parseFloat(bridgingSetupFeeValue.replace(/[%\s]/g, '')) || 0;
+            mortgageSetupFee = initialMortgage * (percent / 100);
+        } else {
+            mortgageSetupFee = parseCurrency(bridgingSetupFeeValue);
+        }
+    }
+    
+    // Refinance calculations - read from input fields (MUST be done before calculating refinance setup fee)
     const refinanceLTVValue = document.getElementById(`${calculatorType}_refinance_ltv`)?.value || '75 %';
     const refinanceLTV = parseFloat(refinanceLTVValue.replace(/[%\s]/g, '')) || 75;
     const refinanceAmount = estimatedMarketValue * (refinanceLTV / 100);
+    
+    // Read refinance set-up fee (AFTER refinanceAmount is calculated, as it may be a percentage of refinanceAmount)
+    let refinanceSetupFee = 0;
+    const refinanceSetupFeeValue = document.getElementById(`${calculatorType}_refinance_setup_fee`)?.value || '£ 0';
+    // Check if it's a percentage or currency
+    if (refinanceSetupFeeValue.includes('%')) {
+        const percent = parseFloat(refinanceSetupFeeValue.replace(/[%\s]/g, '')) || 0;
+        refinanceSetupFee = refinanceAmount * (percent / 100);
+    } else {
+        refinanceSetupFee = parseCurrency(refinanceSetupFeeValue);
+    }
+    
+    // Read additional refinance costs (these are costs paid at refinance and should be included in total investment)
+    let additionalRefinanceCosts = 0;
+    const additionalRefinanceCostInputs = document.querySelectorAll(`[id^="${calculatorType}_additional_refinance_cost_"]`);
+    additionalRefinanceCostInputs.forEach(input => {
+        const value = parseCurrency(input.value || '£ 0');
+        additionalRefinanceCosts += value;
+    });
+    
+    // Total investment (deposit + stamp duty + refurb cost + survey costs + legal fees + mortgage set-up fee + refinance set-up fee + additional refinance costs + additional purchase costs)
+    // Note: Refinance costs are included as they need to be funded upfront
+    const deposit = purchasePrice - initialMortgage;
+    const totalInvestment = deposit + stampDuty + refurbCost + surveyCosts + legalFees + mortgageSetupFee + refinanceSetupFee + additionalRefinanceCosts + additionalPurchaseCosts;
     const lockedInEquity = estimatedMarketValue - refinanceAmount;
     const moneyBack = refinanceAmount - initialMortgage;
     const moneyLeftIn = totalInvestment - moneyBack;
     
-    // Debug: Log key values
-    console.log('calculateBRRValues - estimatedMarketValue:', estimatedMarketValue, 'refinanceAmount:', refinanceAmount, 'refinanceLTV:', refinanceLTV);
+    // Debug: Log key values for Money Left In calculation
+    console.log('💰 Money Left In Calculation:');
+    console.log('  purchasePrice:', purchasePrice);
+    console.log('  initialMortgage:', initialMortgage);
+    console.log('  deposit:', deposit);
+    console.log('  stampDuty:', stampDuty);
+    console.log('  refurbCost:', refurbCost);
+    console.log('  surveyCosts:', surveyCosts);
+    console.log('  legalFees:', legalFees);
+    console.log('  mortgageSetupFee:', mortgageSetupFee);
+    console.log('  refinanceSetupFee:', refinanceSetupFee);
+    console.log('  additionalRefinanceCosts:', additionalRefinanceCosts);
+    console.log('  additionalPurchaseCosts:', additionalPurchaseCosts);
+    console.log('  totalInvestment:', totalInvestment);
+    console.log('  estimatedMarketValue:', estimatedMarketValue);
+    console.log('  refinanceLTV:', refinanceLTV);
+    console.log('  refinanceAmount:', refinanceAmount);
+    console.log('  moneyBack:', moneyBack);
+    console.log('  moneyLeftIn:', moneyLeftIn);
     
     // Ideal purchase price - calculate based on target ROI and interest rates
     // This will be recalculated after we have the interest rates
@@ -3416,19 +3490,218 @@ function calculateBRRValues(calculatorType) {
         bridgingCost = bridgingInterest * vacantPeriod;
     }
     
-    // Annual expenses (mortgage interest + bridging costs)
-    const totalAnnualExpenses = annualMortgageInterest + bridgingCost;
+    // Calculate ongoing costs
+    // Maintenance (as % of income)
+    const maintenancePercentValue = document.getElementById(`${calculatorType}_maintenance_percent`)?.value || '10 %';
+    const maintenancePercent = parseFloat(maintenancePercentValue.replace(/[%\s]/g, '')) || 10;
+    const annualMaintenance = annualRent * (maintenancePercent / 100);
+    
+    // Agent fees (as % of income)
+    const agentFeesValue = document.getElementById(`${calculatorType}_agent_fees`)?.value || '10 %';
+    const agentFeesPercent = parseFloat(agentFeesValue.replace(/[%\s]/g, '')) || 10;
+    const annualAgentFees = annualRent * (agentFeesPercent / 100);
+    
+    // Insurance (monthly, convert to annual)
+    const ongoingInsuranceValue = document.getElementById(`${calculatorType}_ongoing_insurance`)?.value || '£ 40';
+    const monthlyInsurance = parseCurrency(ongoingInsuranceValue);
+    const annualInsurance = monthlyInsurance * 12;
+    
+    // Ongoing mortgage payments (annual)
+    const ongoingMortgagePaymentsValue = document.getElementById(`${calculatorType}_ongoing_mortgage_payments`)?.value || '£ 0';
+    const monthlyOngoingMortgage = parseCurrency(ongoingMortgagePaymentsValue);
+    const annualOngoingMortgage = monthlyOngoingMortgage * 12;
+    
+    // Additional annual expenses
+    let additionalAnnualExpenses = 0;
+    const additionalAnnualExpensesInputs = document.querySelectorAll(`[id^="${calculatorType}_additional_annual_expense_"]`);
+    additionalAnnualExpensesInputs.forEach(input => {
+        const value = parseCurrency(input.value || '£ 0');
+        additionalAnnualExpenses += value;
+    });
+    
+    // Additional monthly expenses (convert to annual)
+    let additionalMonthlyExpenses = 0;
+    const additionalMonthlyExpensesInputs = document.querySelectorAll(`[id^="${calculatorType}_additional_monthly_expense_"]`);
+    additionalMonthlyExpensesInputs.forEach(input => {
+        const value = parseCurrency(input.value || '£ 0');
+        additionalMonthlyExpenses += value;
+    });
+    const annualAdditionalMonthlyExpenses = additionalMonthlyExpenses * 12;
+    
+    // Total annual expenses
+    // Use actual mortgage payments (monthly * 12) which includes both interest and principal for repayment mortgages
+    // For interest-only, this equals the interest
+    // Only include bridgingCost if using bridging finance
+    const annualMortgagePayments = monthlyMortgagePaymentRefi * 12;
+    const totalAnnualExpenses = annualMortgagePayments + (financingType === 'bridging' ? bridgingCost : 0) + annualMaintenance + annualAgentFees + annualInsurance + additionalAnnualExpenses + annualAdditionalMonthlyExpenses;
+    
+    // Update ongoing mortgage payments field with refinance mortgage payments
+    updateElement(`${calculatorType}_ongoing_mortgage_payments`, formatCurrency(monthlyMortgagePaymentRefi));
+    
     const annualProfit = annualRent - totalAnnualExpenses;
     const monthlyProfit = annualProfit / 12;
     
     // ROI calculations
-    const roi = moneyLeftIn > 0 ? (annualProfit / moneyLeftIn) * 100 : 0;
-    const roce = totalInvestment > 0 ? (annualProfit / totalInvestment) * 100 : 0;
+    // Show "Infinite" if moneyLeftIn is negative (you're getting money back)
+    let roi = 0;
+    if (moneyLeftIn > 0) {
+        roi = (annualProfit / moneyLeftIn) * 100;
+    } else if (moneyLeftIn < 0 && annualProfit > 0) {
+        roi = Infinity; // Infinite ROI when you get money back
+    }
+    
+    // ROCE - Return on Capital Employed
+    // ROCE should use the actual capital employed after refinance (money left in)
+    // If moneyLeftIn is negative (you get money back), ROCE is infinite
+    let roce = 0;
+    if (moneyLeftIn > 0) {
+        roce = (annualProfit / moneyLeftIn) * 100;
+    } else if (moneyLeftIn < 0 && annualProfit > 0) {
+        roce = Infinity; // Infinite ROCE when you get money back
+    } else if (moneyLeftIn <= 0 && totalInvestment > 0) {
+        // Fallback to totalInvestment if moneyLeftIn is 0 or negative
+        roce = (annualProfit / totalInvestment) * 100;
+    }
     const netYield = estimatedMarketValue > 0 ? (annualProfit / estimatedMarketValue) * 100 : 0;
     
     // Equity in 10 years
     const futureValue = estimatedMarketValue * Math.pow(1 + appreciation / 100, 10);
     const equity10Years = futureValue - refinanceAmount;
+    
+    // Calculate Ideal Purchase Price
+    // This is the maximum purchase price where moneyLeftIn would be 0 (break-even)
+    // moneyLeftIn = totalInvestment - (refinanceAmount - initialMortgage)
+    // For break-even: totalInvestment = refinanceAmount - initialMortgage
+    // Simplifying: purchasePrice + stampDuty + refurbCost + surveyCosts + legalFees + mortgageSetupFee = refinanceAmount
+    // But stamp duty and mortgageSetupFee depend on purchase price, so we need to iterate
+    
+    if (refinanceAmount > 0) {
+        // Get mortgage LTV for initial financing
+        const mortgageLTV = financingType === 'mortgage' ? 
+            parseFloat(document.getElementById(`${calculatorType}_mortgage_ltv`)?.value?.replace(/[%\s]/g, '') || '75') :
+            (financingType === 'bridging' ? 
+                parseFloat(document.getElementById(`${calculatorType}_bridging_ltv`)?.value?.replace(/[%\s]/g, '') || '75') : 0);
+        
+        // Determine if additional property for stamp duty calculation
+        let isAdditionalPropertyForIdeal = calculatorType !== 'purchase';
+        if (individualMoving) {
+            isAdditionalPropertyForIdeal = false;
+        }
+        
+        // Iterative calculation to find ideal purchase price
+        // For break-even: totalInvestment = refinanceAmount - initialMortgage
+        // Simplifying: purchasePrice + stampDuty + refurbCost + surveyCosts + legalFees + setupFee = refinanceAmount
+        // Start with a reasonable estimate (refinanceAmount minus fixed costs, ignoring stamp duty for now)
+        let testPrice = refinanceAmount - refurbCost - surveyCosts - legalFees - mortgageSetupFee - 1000; // Subtract 1000 as rough estimate for stamp duty
+        // Ensure it's reasonable
+        if (testPrice < purchasePrice * 0.1) testPrice = purchasePrice * 0.5;
+        if (testPrice > estimatedMarketValue) testPrice = estimatedMarketValue * 0.8;
+        let iterations = 0;
+        const maxIterations = 50;
+        let lastTestPrice = testPrice;
+        let bestPrice = testPrice;
+        let bestMoneyLeftIn = Infinity;
+        let testMoneyLeftIn = Infinity; // Initialize to avoid ReferenceError
+        
+        while (iterations < maxIterations) {
+            // Calculate stamp duty for test price
+            const testStampDutyBreakdown = [];
+            const testStampDuty = calculateStampDuty(testPrice, stampDutyPeriod, individualMoving, firstTimeBuyer, overseasBuyer, testStampDutyBreakdown, isAdditionalPropertyForIdeal);
+            
+            // Calculate initial mortgage for test price
+            const testInitialMortgage = testPrice * (mortgageLTV / 100);
+            
+            // Calculate setup fee for test price
+            let testSetupFee = 0;
+            if (financingType === 'mortgage') {
+                const mortgageSetupFeeValue = document.getElementById(`${calculatorType}_mortgage_setup_fee`)?.value || '£ 1,000';
+                if (mortgageSetupFeeValue.includes('%')) {
+                    const percent = parseFloat(mortgageSetupFeeValue.replace(/[%\s]/g, '')) || 0;
+                    testSetupFee = testInitialMortgage * (percent / 100);
+                } else {
+                    testSetupFee = parseCurrency(mortgageSetupFeeValue);
+                }
+            } else if (financingType === 'bridging') {
+                const bridgingSetupFeeValue = document.getElementById(`${calculatorType}_bridging_setup_fee`)?.value || '1.75 %';
+                if (bridgingSetupFeeValue.includes('%')) {
+                    const percent = parseFloat(bridgingSetupFeeValue.replace(/[%\s]/g, '')) || 0;
+                    testSetupFee = testInitialMortgage * (percent / 100);
+                } else {
+                    testSetupFee = parseCurrency(bridgingSetupFeeValue);
+                }
+            }
+            
+            // Calculate refinance setup fee for test price (if it's a percentage)
+            let testRefinanceSetupFee = 0;
+            const refinanceSetupFeeValueForTest = document.getElementById(`${calculatorType}_refinance_setup_fee`)?.value || '£ 0';
+            if (refinanceSetupFeeValueForTest.includes('%')) {
+                const percent = parseFloat(refinanceSetupFeeValueForTest.replace(/[%\s]/g, '')) || 0;
+                testRefinanceSetupFee = refinanceAmount * (percent / 100);
+            } else {
+                testRefinanceSetupFee = parseCurrency(refinanceSetupFeeValueForTest);
+            }
+            
+            // Calculate total investment for test price (must match the same calculation as main totalInvestment)
+            const testDeposit = testPrice - testInitialMortgage;
+            const testTotalInvestment = testDeposit + testStampDuty + refurbCost + surveyCosts + legalFees + testSetupFee + testRefinanceSetupFee;
+            
+            // Calculate money left in for test price
+            testMoneyLeftIn = testTotalInvestment - (refinanceAmount - testInitialMortgage);
+            
+            // Track the best (closest to zero) result
+            if (Math.abs(testMoneyLeftIn) < Math.abs(bestMoneyLeftIn)) {
+                bestPrice = testPrice;
+                bestMoneyLeftIn = testMoneyLeftIn;
+            }
+            
+            // If we're very close to zero, we found it
+            if (Math.abs(testMoneyLeftIn) < 0.01) {
+                idealPurchasePrice = testPrice;
+                break;
+            }
+            
+            // Adjust test price based on money left in
+            // If moneyLeftIn is positive, totalInvestment > moneyBack, so we need a LOWER purchase price
+            // If moneyLeftIn is negative, totalInvestment < moneyBack, so we need a HIGHER purchase price
+            // Use binary search approach for more stable convergence
+            if (testMoneyLeftIn > 0) {
+                // Too high, need to reduce
+                testPrice = testPrice * 0.9;
+            } else {
+                // Too low, need to increase
+                testPrice = testPrice * 1.1;
+            }
+            
+            // Alternative: use linear adjustment with damping
+            // const adjustmentFactor = 0.2;
+            // const adjustment = testMoneyLeftIn * adjustmentFactor;
+            // testPrice = testPrice - adjustment;
+            
+            // Check for convergence
+            if (Math.abs(testPrice - lastTestPrice) < 0.01 && iterations > 10) {
+                idealPurchasePrice = bestPrice; // Use the best price we found
+                break;
+            }
+            
+            // Ensure test price is reasonable
+            if (testPrice < 0) testPrice = purchasePrice * 0.1;
+            if (testPrice > estimatedMarketValue * 1.2) testPrice = estimatedMarketValue * 0.9;
+            
+            lastTestPrice = testPrice;
+            iterations++;
+        }
+        
+        // Use the best price found, or the final test price if we didn't converge
+        idealPurchasePrice = Math.abs(bestMoneyLeftIn) < Math.abs(testMoneyLeftIn) ? bestPrice : testPrice;
+        
+        // Ensure it's positive and reasonable
+        if (idealPurchasePrice < 0 || isNaN(idealPurchasePrice) || !isFinite(idealPurchasePrice)) {
+            idealPurchasePrice = purchasePrice; // Fallback to current purchase price
+        }
+        if (idealPurchasePrice > estimatedMarketValue * 1.5) {
+            idealPurchasePrice = estimatedMarketValue * 0.9; // Cap at 90% of market value
+        }
+    }
     
     // Update UI
     updateElement(`${calculatorType}_stamp_duty`, formatCurrency(stampDuty));
@@ -3447,6 +3720,10 @@ function calculateBRRValues(calculatorType) {
         updateElement(`${calculatorType}_bridging_interest`, formatCurrency(monthlyMortgagePaymentInitial));
     }
     
+    // Update Mortgage Required / Finance Required field based on financing type
+    updateElement(`${calculatorType}_mortgage_required`, formatCurrency(initialMortgage));
+    updateElement(`${calculatorType}_bridging_finance_required`, formatCurrency(initialMortgage));
+    
     updateElement(`${calculatorType}_refinance_mortgage_payments`, formatCurrency(monthlyMortgagePaymentRefi));
     updateElement(`${calculatorType}_locked_in_equity`, formatCurrency(lockedInEquity));
     updateElement(`${calculatorType}_money_left_in`, formatCurrency(moneyLeftIn));
@@ -3455,8 +3732,8 @@ function calculateBRRValues(calculatorType) {
     updateElement(`${calculatorType}_total_annual_expenses`, formatCurrency(totalAnnualExpenses));
     updateElement(`${calculatorType}_annual_profit`, formatCurrency(annualProfit));
     updateElement(`${calculatorType}_monthly_profit`, formatCurrency(monthlyProfit));
-    updateElement(`${calculatorType}_roi`, roi > 0 ? roi.toFixed(2) + '%' : '-%');
-    updateElement(`${calculatorType}_roce`, roce > 0 ? roce.toFixed(2) + '%' : '-%');
+    updateElement(`${calculatorType}_roi`, roi === Infinity ? 'Infinite' : (roi > 0 ? roi.toFixed(2) + '%' : '-%'));
+    updateElement(`${calculatorType}_roce`, roce === Infinity ? 'Infinite' : (roce > 0 ? roce.toFixed(2) + '%' : '-%'));
     updateElement(`${calculatorType}_gross_yield_metric`, grossYield > 0 ? grossYield.toFixed(2) + '%' : '-%');
     updateElement(`${calculatorType}_net_yield`, netYield > 0 ? netYield.toFixed(2) + '%' : '-%');
     updateElement(`${calculatorType}_equity_10_years`, formatCurrency(equity10Years));
