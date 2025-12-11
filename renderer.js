@@ -27,10 +27,12 @@ let BACKEND_URL = (() => {
         // Only allow localhost override if we're actually on localhost
         if (override.includes('localhost') && typeof window !== 'undefined' && window.location && 
             (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+            console.log('🔗 Using localStorage override (localhost):', override);
             return override;
         }
         // For production, ignore localhost overrides
         if (!override.includes('localhost')) {
+            console.log('🔗 Using localStorage override (hosted):', override);
             return override;
         }
     }
@@ -38,17 +40,23 @@ let BACKEND_URL = (() => {
     // Check if we're in Electron (local development)
     if (ipcRenderer) {
         // Electron mode - use localhost for local development
+        console.log('🔗 Electron mode - using localhost:8080');
         return 'http://localhost:8080';
     }
     
     // Check if we're running on localhost (browser mode - development)
     if (typeof window !== 'undefined' && window.location && 
         (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+        console.log('🔗 Browser on localhost - using localhost:8080');
         return 'http://localhost:8080';
     }
     
     // Production: Always use hosted backend
-    return 'https://pdf-generator-backend-fbtb.onrender.com';
+    const hostedUrl = 'https://pdf-generator-backend-fbtb.onrender.com';
+    console.warn('⚠️ Using HOSTED backend (not local):', hostedUrl);
+    console.warn('⚠️ To use local backend, access the app via http://localhost:3000');
+    console.warn('⚠️ Or set localStorage: localStorage.setItem("backend_url", "http://localhost:8080")');
+    return hostedUrl;
 })();
 
 // Image storage
@@ -218,6 +226,12 @@ function getFormData() {
         data.calculator_type = selectedCalculators[0];
     }
     
+    // Explicitly set calculator_type to 'brr' if BRR is selected (even if multiple calculators)
+    if (selectedCalculators.includes('brr')) {
+        data.calculator_type = 'brr';
+        data.is_brr_calculator = true;
+    }
+    
     // Get calculator-specific data
     selectedCalculators.forEach(calcType => {
         const calcData = {};
@@ -228,6 +242,174 @@ function getFormData() {
                 calcData[input.dataset.originalId] = input.value.trim();
             }
         });
+        
+        // For BRR calculator, also include all calculated/displayed values and breakdowns
+        if (calcType === 'brr') {
+            // Get financing type
+            const financingTypeHidden = document.getElementById(`${calcType}_financing_type_hidden`);
+            const financingType = financingTypeHidden?.value || 'bridging';
+            calcData.financing_type = financingType;
+            calcData.chosen_financing = financingType === 'mortgage' ? 'Mortgage' : (financingType === 'bridging' ? 'Bridging Finance' : 'Cash');
+            
+            // Helper function to get value from element (handles both input and text content)
+            const getValue = (id, isInput = false) => {
+                const el = document.getElementById(id);
+                if (!el) return '';
+                if (isInput) {
+                    return el.value?.trim() || el.textContent?.trim() || '';
+                }
+                return el.textContent?.trim() || el.value?.trim() || '';
+            };
+            
+            // Get all displayed calculated values and breakdowns
+            const calculatedFields = {
+                // Purchase section
+                'purchase_price': getValue(`${calcType}_purchase_price`, true),
+                'purchase_price_display': getValue(`${calcType}_purchase_price`, true),
+                'stamp_duty': getValue(`${calcType}_stamp_duty`),
+                'survey_costs': getValue(`${calcType}_survey_costs`, true),
+                'legal_fees': getValue(`${calcType}_legal_fees`, true),
+                'total_investment': getValue(`${calcType}_total_investment`),
+                'total_investment_required': getValue(`${calcType}_total_investment`),
+                
+                // Initial Financing - Mortgage
+                'mortgage_setup_fee': getValue(`${calcType}_mortgage_setup_fee`, true),
+                'mortgage_ltv': getValue(`${calcType}_mortgage_ltv`, true),
+                'mortgage_interest_rate': getValue(`${calcType}_mortgage_interest_rate`, true),
+                'mortgage_term_years': getValue(`${calcType}_mortgage_term_years`, true),
+                'mortgage_type_interest_only': document.querySelector(`[data-mortgage-type="interest_only"][data-calculator="${calcType}"]`)?.classList.contains('pe-financing-type-active') || false,
+                'mortgage_required': getValue(`${calcType}_mortgage_required`),
+                'mortgage_payments': getValue(`${calcType}_mortgage_payments`),
+                
+                // Initial Financing - Bridging
+                'bridging_setup_fee': getValue(`${calcType}_bridging_setup_fee`, true),
+                'bridging_ltv': getValue(`${calcType}_bridging_ltv`, true),
+                'bridging_interest_rate_monthly': getValue(`${calcType}_bridging_interest_rate_monthly`, true),
+                'bridging_interest_display': getValue(`${calcType}_bridging_interest`, true),
+                'bridging_finance_required': getValue(`${calcType}_bridging_finance_required`),
+                
+                // Refurb
+                'refurb_cost': getValue(`${calcType}_refurb_cost`, true),
+                'include_in_bridging': document.getElementById(`${calcType}_include_in_bridging`)?.classList.contains('pe-toggle-button-active') || false,
+                'vacant_period': getValue(`${calcType}_vacant_period`, true),
+                'refurb_council_tax': getValue(`${calcType}_refurb_council_tax`, true),
+                'refurb_electric_gas': getValue(`${calcType}_refurb_electric_gas`, true),
+                'refurb_water': getValue(`${calcType}_refurb_water`, true),
+                'refurb_insurance': getValue(`${calcType}_refurb_insurance`, true),
+                
+                // Refinance
+                'estimated_market_value': getValue(`${calcType}_estimated_market_value`),
+                'refinance_setup_fee': getValue(`${calcType}_refinance_setup_fee`, true),
+                'refinance_ltv': getValue(`${calcType}_refinance_ltv`, true),
+                'refinance_mortgage_type_interest_only': document.querySelector(`[data-refinance-mortgage-type="interest_only"][data-calculator="${calcType}"]`)?.classList.contains('pe-financing-type-active') || false,
+                'refinance_interest_rate': getValue(`${calcType}_refinance_interest_rate`, true),
+                'refinance_mortgage_term_years': getValue(`${calcType}_refinance_mortgage_term_years`, true),
+                'refinance_mortgage_payments': getValue(`${calcType}_refinance_mortgage_payments`),
+                'locked_in_equity': getValue(`${calcType}_locked_in_equity`),
+                'money_left_in': getValue(`${calcType}_money_left_in`),
+                'ideal_purchase_price': getValue(`${calcType}_ideal_purchase_price`),
+                
+                // Rental Income
+                'monthly_rent': getValue(`${calcType}_monthly_rent`, true),
+                'gross_yield': getValue(`${calcType}_gross_yield`),
+                
+                // Ongoing Costs
+                'maintenance_percent': getValue(`${calcType}_maintenance_percent`, true),
+                'ongoing_insurance': getValue(`${calcType}_ongoing_insurance`, true),
+                'agent_fees': getValue(`${calcType}_agent_fees`, true),
+                'ongoing_mortgage_payments': getValue(`${calcType}_ongoing_mortgage_payments`),
+                
+                // Summary
+                'total_annual_expenses': getValue(`${calcType}_total_annual_expenses`, true),
+                'annual_profit': getValue(`${calcType}_annual_profit`),
+                'monthly_profit': getValue(`${calcType}_monthly_profit`),
+                'total_annual_profit': getValue(`${calcType}_annual_profit`),
+                'total_monthly_profit': getValue(`${calcType}_monthly_profit`),
+                
+                // Metrics
+                'roi': getValue(`${calcType}_roi`),
+                'return_on_investment': getValue(`${calcType}_roi`),
+                'roce': getValue(`${calcType}_roce`),
+                'return_on_capital_employed': getValue(`${calcType}_roce`),
+                'net_yield': getValue(`${calcType}_net_yield`),
+                'equity_10_years': getValue(`${calcType}_equity_10_years`),
+                'appreciation': getValue(`${calcType}_appreciation`, true),
+                'annual_property_appreciation': getValue(`${calcType}_appreciation`, true),
+            };
+            
+            // Calculate additional breakdown values for PDF
+            // Parse numeric values for calculations
+            const purchasePriceNum = parseFloat(getValue(`${calcType}_purchase_price`, true).replace(/[£,\s]/g, '')) || 0;
+            const mortgageRequiredStr = getValue(`${calcType}_mortgage_required`);
+            const bridgingRequiredStr = getValue(`${calcType}_bridging_finance_required`);
+            const initialMortgageNum = parseFloat((financingType === 'mortgage' ? mortgageRequiredStr : bridgingRequiredStr).replace(/[£,\s]/g, '')) || 0;
+            const depositAmount = purchasePriceNum - initialMortgageNum;
+            
+            // Add calculated breakdown values
+            calculatedFields.deposit_amount = depositAmount;
+            calculatedFields.deposit_percent = purchasePriceNum > 0 ? ((depositAmount / purchasePriceNum) * 100).toFixed(1) : '0';
+            calculatedFields.finance_required = financingType === 'mortgage' ? getValue(`${calcType}_mortgage_required`) : getValue(`${calcType}_bridging_finance_required`);
+            calculatedFields.monthly_payments = financingType === 'mortgage' ? getValue(`${calcType}_mortgage_payments`) : getValue(`${calcType}_bridging_interest`, true);
+            calculatedFields.outstanding_finance_balance = initialMortgageNum; // Initial mortgage/bridging amount
+            calculatedFields.new_mortgage_amount = parseFloat(getValue(`${calcType}_estimated_market_value`).replace(/[£,\s]/g, '')) * (parseFloat(getValue(`${calcType}_refinance_ltv`, true).replace(/[%\s]/g, '')) || 75) / 100;
+            calculatedFields.new_monthly_payments = getValue(`${calcType}_refinance_mortgage_payments`);
+            calculatedFields.total_annual_income = (parseFloat(getValue(`${calcType}_monthly_rent`, true).replace(/[£,\s]/g, '')) || 0) * 12;
+            
+            // Expenses during refurb breakdown
+            const vacantPeriodNum = parseFloat(getValue(`${calcType}_vacant_period`, true)) || 0;
+            const councilTaxAnnual = parseFloat(getValue(`${calcType}_refurb_council_tax`, true).replace(/[£,\s]/g, '')) || 0;
+            const councilTaxDuringRefurb = (councilTaxAnnual / 12) * vacantPeriodNum;
+            const electricGasDuringRefurb = (parseFloat(getValue(`${calcType}_refurb_electric_gas`, true).replace(/[£,\s]/g, '')) || 0) * vacantPeriodNum;
+            const waterDuringRefurb = (parseFloat(getValue(`${calcType}_refurb_water`, true).replace(/[£,\s]/g, '')) || 0) * vacantPeriodNum;
+            const insuranceDuringRefurb = (parseFloat(getValue(`${calcType}_refurb_insurance`, true).replace(/[£,\s]/g, '')) || 0) * vacantPeriodNum;
+            
+            calculatedFields.council_tax_during_refurb = councilTaxDuringRefurb;
+            calculatedFields.electric_gas_during_refurb = electricGasDuringRefurb;
+            calculatedFields.water_during_refurb = waterDuringRefurb;
+            calculatedFields.insurance_during_refurb = insuranceDuringRefurb;
+            
+            // Interest during refurb (mortgage payments or bridging interest)
+            if (financingType === 'mortgage') {
+                const mortgagePayments = parseFloat(getValue(`${calcType}_mortgage_payments`).replace(/[£,\s]/g, '')) || 0;
+                calculatedFields.interest_during_refurb = mortgagePayments * vacantPeriodNum;
+            } else if (financingType === 'bridging') {
+                const bridgingInterest = parseFloat(getValue(`${calcType}_bridging_interest`, true).replace(/[£,\s]/g, '')) || 0;
+                calculatedFields.interest_during_refurb = bridgingInterest * vacantPeriodNum;
+            } else {
+                calculatedFields.interest_during_refurb = 0;
+            }
+            
+            // Loan set-up fee (mortgage or bridging) - for "Loan Set-up" field in PDF
+            let loanSetupFee = 0;
+            if (financingType === 'mortgage') {
+                const mortgageSetupFeeValue = getValue(`${calcType}_mortgage_setup_fee`, true);
+                if (mortgageSetupFeeValue.includes('%')) {
+                    const percent = parseFloat(mortgageSetupFeeValue.replace(/[%\s]/g, '')) || 0;
+                    loanSetupFee = initialMortgageNum * (percent / 100);
+                } else {
+                    loanSetupFee = parseFloat(mortgageSetupFeeValue.replace(/[£,\s]/g, '')) || 0;
+                }
+            } else if (financingType === 'bridging') {
+                const bridgingSetupFeeValue = getValue(`${calcType}_bridging_setup_fee`, true);
+                if (bridgingSetupFeeValue.includes('%')) {
+                    const percent = parseFloat(bridgingSetupFeeValue.replace(/[%\s]/g, '')) || 0;
+                    loanSetupFee = initialMortgageNum * (percent / 100);
+                } else {
+                    loanSetupFee = parseFloat(bridgingSetupFeeValue.replace(/[£,\s]/g, '')) || 0;
+                }
+            }
+            calculatedFields.loan_setup = loanSetupFee;
+            calculatedFields.loan_setup_fee = loanSetupFee;
+            
+            // Add calculated fields to calcData
+            Object.assign(calcData, calculatedFields);
+            
+            // Also add to root level for easier access by backend (with brr_ prefix)
+            Object.keys(calculatedFields).forEach(key => {
+                data[`brr_${key}`] = calculatedFields[key];
+            });
+        }
+        
         data[`calculator_${calcType}`] = calcData;
     });
     
@@ -490,8 +672,25 @@ async function generatePDFFile() {
 
             // Debug logging
             console.log('Frontend - selected_calculators:', data.selected_calculators);
-            console.log('Frontend - calculator data keys:', Object.keys(data).filter(k => k.startsWith('calculator_')));
-            console.log('Frontend - full data object:', JSON.stringify(data, null, 2));
+            console.log('Frontend - calculator_type:', data.calculator_type);
+            console.log('Frontend - is_brr_calculator:', data.is_brr_calculator);
+            console.log('Frontend - calculator data keys:', Object.keys(data).filter(k => k.startsWith('calculator_') || k.startsWith('brr_')));
+            console.log('Frontend - BRR fields count:', Object.keys(data).filter(k => k.startsWith('brr_')).length);
+            if (data.calculator_brr) {
+                console.log('Frontend - calculator_brr keys:', Object.keys(data.calculator_brr));
+                console.log('Frontend - calculator_brr sample:', {
+                    purchase_price: data.calculator_brr.purchase_price,
+                    total_investment: data.calculator_brr.total_investment,
+                    financing_type: data.calculator_brr.financing_type,
+                    money_left_in: data.calculator_brr.money_left_in,
+                    roi: data.calculator_brr.roi
+                });
+            }
+            
+            // Debug: Log which backend URL is being used
+            console.log('🔗 Using backend URL:', BACKEND_URL);
+            console.log('🔗 localStorage backend_url:', localStorage.getItem('backend_url'));
+            console.log('🔗 Current hostname:', window.location.hostname);
             
             const resp = await fetch(`${BACKEND_URL}/generate`, {
                 method: 'POST',
@@ -1787,23 +1986,23 @@ function createBRRCalculator(calculatorType) {
                             <input type="hidden" name="${calculatorType}_financing_type" value="bridging" id="${calculatorType}_financing_type_hidden">
                         </div>
                     </div>
-                    <div class="pe-field" id="${calculatorType}_financing_payment_field">
-                        <label class="pe-field-label" id="${calculatorType}_financing_payment_label">Bridging Interest / pcm</label>
-                        <input type="text" class="pe-input" id="${calculatorType}_bridging_interest" data-original-id="bridging_interest" data-calculator="${calculatorType}" value="£ 0">
-                    </div>
                     <div class="pe-field pe-field-detailed pe-field-bridging" style="display: none;">
                         <label class="pe-field-label">Bridging Set-up Fee</label>
                         <div class="pe-field-with-action">
                             <input type="text" class="pe-input" id="${calculatorType}_bridging_setup_fee" data-original-id="bridging_setup_fee" data-calculator="${calculatorType}" value="1.75 %">
                             <div class="pe-toggle-group">
-                                <button type="button" class="pe-toggle-small pe-toggle-small-active" data-fee-type="percent" data-calculator="${calculatorType}">%</button>
-                                <button type="button" class="pe-toggle-small" data-fee-type="currency" data-calculator="${calculatorType}">£</button>
+                                <button type="button" class="pe-toggle-small pe-toggle-small-active" data-fee-type="percent" data-fee-for="bridging" data-calculator="${calculatorType}">%</button>
+                                <button type="button" class="pe-toggle-small" data-fee-type="currency" data-fee-for="bridging" data-calculator="${calculatorType}">£</button>
                             </div>
                         </div>
                     </div>
                     <div class="pe-field pe-field-detailed pe-field-bridging" style="display: none;">
                         <label class="pe-field-label">Bridging Loan to Value</label>
                         <input type="text" class="pe-input" id="${calculatorType}_bridging_ltv" data-original-id="bridging_ltv" data-calculator="${calculatorType}" value="75 %">
+                    </div>
+                    <div class="pe-field" id="${calculatorType}_financing_payment_field">
+                        <label class="pe-field-label" id="${calculatorType}_financing_payment_label">Bridging Interest / pcm</label>
+                        <input type="text" class="pe-input" id="${calculatorType}_bridging_interest" data-original-id="bridging_interest" data-calculator="${calculatorType}" value="£ 0">
                     </div>
                     <div class="pe-field pe-field-detailed pe-field-bridging" style="display: none;">
                         <label class="pe-field-label">Interest Rate (monthly)</label>
@@ -1823,7 +2022,7 @@ function createBRRCalculator(calculatorType) {
                             </div>
                         </div>
                     </div>
-                    <div class="pe-field pe-field-detailed" style="display: none;">
+                    <div class="pe-field pe-field-detailed pe-field-mortgage" style="display: none;">
                         <label class="pe-field-label">Mortgage Loan to Value</label>
                         <input type="text" class="pe-input" id="${calculatorType}_mortgage_ltv" data-original-id="mortgage_ltv" data-calculator="${calculatorType}" value="75 %">
                     </div>
@@ -1995,10 +2194,6 @@ function createBRRCalculator(calculatorType) {
                 
                 <div class="pe-section pe-field-detailed" style="display: none;">
                     <h3 class="pe-section-title">Ongoing Costs</h3>
-                    <div class="pe-field">
-                        <label class="pe-field-label">Annual Expenses</label>
-                        <input type="text" class="pe-input" id="${calculatorType}_annual_expenses" data-original-id="annual_expenses" data-calculator="${calculatorType}" value="">
-                    </div>
                     <div class="pe-field">
                         <label class="pe-field-label">% of Income on Maintenance</label>
                         <input type="text" class="pe-input" id="${calculatorType}_maintenance_percent" data-original-id="maintenance_percent" data-calculator="${calculatorType}" value="10 %">
@@ -3283,12 +3478,10 @@ function calculateBRRValues(calculatorType) {
     });
     
     // Total investment (deposit + stamp duty + refurb cost + survey costs + legal fees + mortgage set-up fee + refinance set-up fee + additional refinance costs + additional purchase costs)
-    // Note: Refinance costs are included as they need to be funded upfront
+    // Note: Expenses during refurb will be added after mortgage payments are calculated
     const deposit = purchasePrice - initialMortgage;
-    const totalInvestment = deposit + stampDuty + refurbCost + surveyCosts + legalFees + mortgageSetupFee + refinanceSetupFee + additionalRefinanceCosts + additionalPurchaseCosts;
-    const lockedInEquity = estimatedMarketValue - refinanceAmount;
-    const moneyBack = refinanceAmount - initialMortgage;
-    const moneyLeftIn = totalInvestment - moneyBack;
+    let totalInvestment = deposit + stampDuty + refurbCost + surveyCosts + legalFees + mortgageSetupFee + refinanceSetupFee + additionalRefinanceCosts + additionalPurchaseCosts;
+    // lockedInEquity, moneyBack, and moneyLeftIn will be calculated after expenses during refurb are added
     
     // Debug: Log key values for Money Left In calculation
     console.log('💰 Money Left In Calculation:');
@@ -3303,12 +3496,10 @@ function calculateBRRValues(calculatorType) {
     console.log('  refinanceSetupFee:', refinanceSetupFee);
     console.log('  additionalRefinanceCosts:', additionalRefinanceCosts);
     console.log('  additionalPurchaseCosts:', additionalPurchaseCosts);
-    console.log('  totalInvestment:', totalInvestment);
+    // expensesDuringRefurb, totalInvestment, moneyBack, and moneyLeftIn will be logged after they're calculated
     console.log('  estimatedMarketValue:', estimatedMarketValue);
     console.log('  refinanceLTV:', refinanceLTV);
     console.log('  refinanceAmount:', refinanceAmount);
-    console.log('  moneyBack:', moneyBack);
-    console.log('  moneyLeftIn:', moneyLeftIn);
     
     // Ideal purchase price - calculate based on target ROI and interest rates
     // This will be recalculated after we have the interest rates
@@ -3484,11 +3675,74 @@ function calculateBRRValues(calculatorType) {
     // Debug: Log mortgage payment calculations
     console.log('Mortgage Payment Calc - refinanceAmount:', refinanceAmount, 'rate:', refinanceMortgageRate, 'monthlyPayment:', monthlyMortgagePaymentRefi, 'annualInterest:', annualMortgageInterest);
     
-    // Bridging costs (only if bridging finance)
+    // Calculate expenses during refurb period (these need to be included in total investment)
+    // Annual expenses (prorated for vacant period)
+    const refurbCouncilTaxValue = document.getElementById(`${calculatorType}_refurb_council_tax`)?.value || '£ 1,670';
+    const refurbCouncilTaxAnnual = parseCurrency(refurbCouncilTaxValue);
+    const refurbCouncilTaxDuringRefurb = (refurbCouncilTaxAnnual / 12) * vacantPeriod;
+    
+    // Additional annual expenses during refurb (prorated)
+    let additionalAnnualExpensesDuringRefurb = 0;
+    const additionalAnnualExpensesRefurbInputs = document.querySelectorAll(`[id^="${calculatorType}_additional_annual_expense_refurb_"]`);
+    additionalAnnualExpensesRefurbInputs.forEach(input => {
+        const value = parseCurrency(input.value || '£ 0');
+        additionalAnnualExpensesDuringRefurb += (value / 12) * vacantPeriod; // Prorate for vacant period
+    });
+    
+    // Monthly expenses during refurb (multiply by vacant period)
+    const refurbElectricGasValue = document.getElementById(`${calculatorType}_refurb_electric_gas`)?.value || '£ 60';
+    const refurbElectricGas = parseCurrency(refurbElectricGasValue) * vacantPeriod;
+    
+    const refurbWaterValue = document.getElementById(`${calculatorType}_refurb_water`)?.value || '£ 30';
+    const refurbWater = parseCurrency(refurbWaterValue) * vacantPeriod;
+    
+    const refurbInsuranceValue = document.getElementById(`${calculatorType}_refurb_insurance`)?.value || '£ 40';
+    const refurbInsurance = parseCurrency(refurbInsuranceValue) * vacantPeriod;
+    
+    // Additional monthly expenses during refurb
+    let additionalMonthlyExpensesDuringRefurb = 0;
+    const additionalMonthlyExpensesRefurbInputs = document.querySelectorAll(`[id^="${calculatorType}_additional_monthly_expense_refurb_"]`);
+    additionalMonthlyExpensesRefurbInputs.forEach(input => {
+        const value = parseCurrency(input.value || '£ 0');
+        additionalMonthlyExpensesDuringRefurb += value * vacantPeriod;
+    });
+    
+    // Mortgage payments during vacant period (full payment, not just interest)
+    let mortgagePaymentsDuringRefurb = 0;
+    if (financingType === 'mortgage' && vacantPeriod > 0) {
+        mortgagePaymentsDuringRefurb = monthlyMortgagePaymentInitial * vacantPeriod;
+    }
+    
+    // Bridging costs during vacant period (only if bridging finance)
+    // This is a one-time cost during refurb, should be included in total investment but NOT in annual expenses
     let bridgingCost = 0;
     if (financingType === 'bridging') {
-        bridgingCost = bridgingInterest * vacantPeriod;
+        // Calculate bridging interest per month from the loan amount and monthly rate
+        const bridgingInterestRateMonthlyValue = document.getElementById(`${calculatorType}_bridging_interest_rate_monthly`)?.value || '1 %';
+        const bridgingInterestRateMonthly = parseFloat(bridgingInterestRateMonthlyValue.replace(/[%\s]/g, '')) || 1;
+        const bridgingInterestPerMonth = initialMortgage * (bridgingInterestRateMonthly / 100);
+        bridgingCost = bridgingInterestPerMonth * vacantPeriod;
     }
+    
+    // Add expenses during refurb to total investment (including bridging cost if applicable)
+    const expensesDuringRefurb = mortgagePaymentsDuringRefurb + refurbCouncilTaxDuringRefurb + refurbElectricGas + refurbWater + refurbInsurance + additionalAnnualExpensesDuringRefurb + additionalMonthlyExpensesDuringRefurb;
+    // For bridging finance, use bridging cost instead of mortgage payments during refurb
+    const expensesDuringRefurbFinal = financingType === 'bridging' ? bridgingCost + refurbCouncilTaxDuringRefurb + refurbElectricGas + refurbWater + refurbInsurance + additionalAnnualExpensesDuringRefurb + additionalMonthlyExpensesDuringRefurb : expensesDuringRefurb;
+    totalInvestment += expensesDuringRefurbFinal;
+    
+    // Log expenses during refurb and updated total investment
+    console.log('  expensesDuringRefurb:', expensesDuringRefurbFinal);
+    console.log('  bridgingCost:', bridgingCost);
+    console.log('  totalInvestment (with refurb expenses):', totalInvestment);
+    
+    // Calculate money left in (now that totalInvestment is complete)
+    lockedInEquity = estimatedMarketValue - refinanceAmount;
+    moneyBack = refinanceAmount - initialMortgage;
+    moneyLeftIn = totalInvestment - moneyBack;
+    
+    // Log money back and money left in
+    console.log('  moneyBack:', moneyBack);
+    console.log('  moneyLeftIn:', moneyLeftIn);
     
     // Calculate ongoing costs
     // Maintenance (as % of income)
@@ -3531,9 +3785,9 @@ function calculateBRRValues(calculatorType) {
     // Total annual expenses
     // Use actual mortgage payments (monthly * 12) which includes both interest and principal for repayment mortgages
     // For interest-only, this equals the interest
-    // Only include bridgingCost if using bridging finance
+    // NOTE: bridgingCost is NOT included here - it's a one-time cost during vacant period, not an ongoing annual expense
     const annualMortgagePayments = monthlyMortgagePaymentRefi * 12;
-    const totalAnnualExpenses = annualMortgagePayments + (financingType === 'bridging' ? bridgingCost : 0) + annualMaintenance + annualAgentFees + annualInsurance + additionalAnnualExpenses + annualAdditionalMonthlyExpenses;
+    const totalAnnualExpenses = annualMortgagePayments + annualMaintenance + annualAgentFees + annualInsurance + additionalAnnualExpenses + annualAdditionalMonthlyExpenses;
     
     // Update ongoing mortgage payments field with refinance mortgage payments
     updateElement(`${calculatorType}_ongoing_mortgage_payments`, formatCurrency(monthlyMortgagePaymentRefi));
@@ -3565,8 +3819,37 @@ function calculateBRRValues(calculatorType) {
     const netYield = estimatedMarketValue > 0 ? (annualProfit / estimatedMarketValue) * 100 : 0;
     
     // Equity in 10 years
+    // PropertyEngine shows the mortgage balance as the initial mortgage balance in the table
+    // However, for equity calculation, we should use the refinance mortgage balance
+    // But the original PropertyEngine appears to use initialMortgage for the table display
+    // Equity in 10 years
+    // PropertyEngine uses the INITIAL mortgage balance for equity calculation (not refinance amount)
+    // This matches their table display which shows the initial mortgage balance for all years
     const futureValue = estimatedMarketValue * Math.pow(1 + appreciation / 100, 10);
-    const equity10Years = futureValue - refinanceAmount;
+    
+    // Use initial mortgage balance (not refinance amount) for equity calculation
+    // For interest-only: balance stays at initialMortgage
+    // For repayment: calculate remaining balance after 10 years based on initial mortgage
+    let mortgageBalance10Years = initialMortgage; // Default for interest-only
+    
+    // Check if initial mortgage is repayment type (reuse variables already calculated earlier)
+    if (isInitialRepayment && initialMortgageRate > 0 && initialMortgage > 0) {
+        // Calculate remaining balance after 10 years for repayment mortgage
+        const monthlyRate = initialMortgageRate / 100 / 12;
+        const totalMonths = mortgageTermYearsInitial * 12;
+        const monthsPaid = 10 * 12; // 10 years
+        
+        if (totalMonths > monthsPaid) {
+            // Remaining balance = P * [(1+r)^n - (1+r)^p] / [(1+r)^n - 1]
+            // Where P = principal, r = monthly rate, n = total months, p = months paid
+            const balanceFactor = (Math.pow(1 + monthlyRate, totalMonths) - Math.pow(1 + monthlyRate, monthsPaid)) / (Math.pow(1 + monthlyRate, totalMonths) - 1);
+            mortgageBalance10Years = initialMortgage * balanceFactor;
+        } else {
+            mortgageBalance10Years = 0; // Fully paid off
+        }
+    }
+    
+    const equity10Years = futureValue - mortgageBalance10Years;
     
     // Calculate Ideal Purchase Price
     // This is the maximum purchase price where moneyLeftIn would be 0 (break-even)
@@ -3641,9 +3924,36 @@ function calculateBRRValues(calculatorType) {
                 testRefinanceSetupFee = parseCurrency(refinanceSetupFeeValueForTest);
             }
             
+            // Calculate mortgage payments during vacant period for test price
+            let testMortgagePaymentsDuringRefurb = 0;
+            if (financingType === 'mortgage' && vacantPeriod > 0) {
+                // Calculate monthly mortgage payment for test price
+                let testMonthlyMortgagePayment = 0;
+                if (testInitialMortgage > 0) {
+                    const monthlyRateTest = (initialMortgageRate / 100) / 12;
+                    const numberOfPaymentsTest = mortgageTermYearsInitial * 12;
+                    if (isInitialRepayment && monthlyRateTest > 0) {
+                        testMonthlyMortgagePayment = testInitialMortgage * (monthlyRateTest * Math.pow(1 + monthlyRateTest, numberOfPaymentsTest)) /
+                                                    (Math.pow(1 + monthlyRateTest, numberOfPaymentsTest) - 1);
+                    } else if (isInitialRepayment && monthlyRateTest === 0) {
+                        testMonthlyMortgagePayment = testInitialMortgage / numberOfPaymentsTest;
+                    } else {
+                        testMonthlyMortgagePayment = testInitialMortgage * (initialMortgageRate / 100) / 12;
+                    }
+                }
+                testMortgagePaymentsDuringRefurb = testMonthlyMortgagePayment * vacantPeriod;
+            }
+            
+            // Calculate expenses during refurb for test price (same as main calculation)
+            const testRefurbCouncilTaxDuringRefurb = (refurbCouncilTaxAnnual / 12) * vacantPeriod;
+            const testRefurbElectricGas = parseCurrency(refurbElectricGasValue) * vacantPeriod;
+            const testRefurbWater = parseCurrency(refurbWaterValue) * vacantPeriod;
+            const testRefurbInsurance = parseCurrency(refurbInsuranceValue) * vacantPeriod;
+            const testExpensesDuringRefurb = testMortgagePaymentsDuringRefurb + testRefurbCouncilTaxDuringRefurb + testRefurbElectricGas + testRefurbWater + testRefurbInsurance;
+            
             // Calculate total investment for test price (must match the same calculation as main totalInvestment)
             const testDeposit = testPrice - testInitialMortgage;
-            const testTotalInvestment = testDeposit + testStampDuty + refurbCost + surveyCosts + legalFees + testSetupFee + testRefinanceSetupFee;
+            const testTotalInvestment = testDeposit + testStampDuty + refurbCost + surveyCosts + legalFees + testSetupFee + testRefinanceSetupFee + testExpensesDuringRefurb;
             
             // Calculate money left in for test price
             testMoneyLeftIn = testTotalInvestment - (refinanceAmount - testInitialMortgage);
@@ -3712,12 +4022,18 @@ function calculateBRRValues(calculatorType) {
     updateElement(`${calculatorType}_mortgage_payments`, formatCurrency(monthlyMortgagePaymentInitial));
     updateElement(`${calculatorType}_mortgage_payments_detailed`, formatCurrency(monthlyMortgagePaymentInitial));
     
-    // Also update the financing payment field if it's showing mortgage payments (not bridging)
+    // Also update the financing payment field based on financing type
     const financingTypeHidden = document.getElementById(`${calculatorType}_financing_type_hidden`);
     const currentFinancingType = financingTypeHidden?.value || 'bridging';
     if (currentFinancingType === 'mortgage') {
         // When showing mortgage payments, update the bridging_interest field (which is reused for mortgage payments)
         updateElement(`${calculatorType}_bridging_interest`, formatCurrency(monthlyMortgagePaymentInitial));
+    } else if (currentFinancingType === 'bridging') {
+        // Calculate bridging interest per month: bridging loan amount * monthly interest rate
+        const bridgingInterestRateMonthlyValue = document.getElementById(`${calculatorType}_bridging_interest_rate_monthly`)?.value || '1 %';
+        const bridgingInterestRateMonthly = parseFloat(bridgingInterestRateMonthlyValue.replace(/[%\s]/g, '')) || 1;
+        const bridgingInterestPerMonth = initialMortgage * (bridgingInterestRateMonthly / 100);
+        updateElement(`${calculatorType}_bridging_interest`, formatCurrency(bridgingInterestPerMonth));
     }
     
     // Update Mortgage Required / Finance Required field based on financing type
