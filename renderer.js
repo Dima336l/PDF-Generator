@@ -232,6 +232,13 @@ function getFormData() {
         data.is_brr_calculator = true;
     }
     
+    // Explicitly set calculator_type to 'holiday-let' if Holiday Let is selected (even if multiple calculators)
+    // This takes priority over BRR if both are selected
+    if (selectedCalculators.includes('holiday-let')) {
+        data.calculator_type = 'holiday-let';
+        data.is_holiday_let_calculator = true;
+    }
+    
     // Get calculator-specific data
     selectedCalculators.forEach(calcType => {
         const calcData = {};
@@ -243,11 +250,11 @@ function getFormData() {
             }
         });
         
-        // For BRR calculator, also include all calculated/displayed values and breakdowns
-        if (calcType === 'brr') {
+        // For BRR and Holiday Let calculators, also include all calculated/displayed values and breakdowns
+        if (calcType === 'brr' || calcType === 'holiday-let') {
             // Get financing type
             const financingTypeHidden = document.getElementById(`${calcType}_financing_type_hidden`);
-            const financingType = financingTypeHidden?.value || 'bridging';
+            const financingType = financingTypeHidden?.value || (calcType === 'holiday-let' ? 'mortgage' : 'bridging');
             calcData.financing_type = financingType;
             calcData.chosen_financing = financingType === 'mortgage' ? 'Mortgage' : (financingType === 'bridging' ? 'Bridging Finance' : 'Cash');
             
@@ -294,6 +301,7 @@ function getFormData() {
                 'include_in_bridging': document.getElementById(`${calcType}_include_in_bridging`)?.classList.contains('pe-toggle-button-active') || false,
                 'vacant_period': getValue(`${calcType}_vacant_period`, true),
                 'refurb_council_tax': getValue(`${calcType}_refurb_council_tax`, true),
+                'refurb_council_tax_monthly': getValue(`${calcType}_refurb_council_tax_monthly`, true),
                 'refurb_electric_gas': getValue(`${calcType}_refurb_electric_gas`, true),
                 'refurb_water': getValue(`${calcType}_refurb_water`, true),
                 'refurb_insurance': getValue(`${calcType}_refurb_insurance`, true),
@@ -312,12 +320,19 @@ function getFormData() {
                 
                 // Rental Income
                 'monthly_rent': getValue(`${calcType}_monthly_rent`, true),
+                'nightly_rate': getValue(`${calcType}_nightly_rate`, true), // Holiday Let specific
+                'occupancy_rate': getValue(`${calcType}_occupancy_rate`, true), // Holiday Let specific
                 'gross_yield': getValue(`${calcType}_gross_yield`),
                 
                 // Ongoing Costs
                 'maintenance_percent': getValue(`${calcType}_maintenance_percent`, true),
                 'ongoing_insurance': getValue(`${calcType}_ongoing_insurance`, true),
                 'agent_fees': getValue(`${calcType}_agent_fees`, true),
+                'management_fee': getValue(`${calcType}_management_fee`, true), // Holiday Let specific
+                'booking_fees': getValue(`${calcType}_booking_fees`, true), // Holiday Let specific
+                'cleaning_costs': getValue(`${calcType}_cleaning_costs`, true), // Holiday Let specific
+                'cleaning_fee': getValue(`${calcType}_cleaning_fee`, true), // Holiday Let specific (alternative field name)
+                'tv_license': document.getElementById(`${calcType}_tv_license`)?.checked || false, // Holiday Let specific
                 'ongoing_mortgage_payments': getValue(`${calcType}_ongoing_mortgage_payments`),
                 
                 // Summary
@@ -405,14 +420,43 @@ function getFormData() {
             // Add calculated fields to calcData
             Object.assign(calcData, calculatedFields);
             
-            // Also add to root level for easier access by backend (with brr_ prefix)
+            // Also add to root level for easier access by backend (with calculator prefix)
+            const prefix = calcType === 'holiday-let' ? 'holiday_let_' : 'brr_';
             Object.keys(calculatedFields).forEach(key => {
-                data[`brr_${key}`] = calculatedFields[key];
+                data[`${prefix}${key}`] = calculatedFields[key];
             });
             
-            // Also add refurb_enabled to root level with brr_ prefix
+            // Also add refurb_enabled to root level with prefix
             if (calcData.refurb_enabled !== undefined) {
-                data[`brr_refurb_enabled`] = calcData.refurb_enabled;
+                data[`${prefix}refurb_enabled`] = calcData.refurb_enabled;
+            }
+            
+            // For Holiday Let, also add specific fields with prefix
+            if (calcType === 'holiday-let') {
+                if (calcData.nightly_rate !== undefined) {
+                    data[`${prefix}nightly_rate`] = calcData.nightly_rate;
+                }
+                if (calcData.occupancy_rate !== undefined) {
+                    data[`${prefix}occupancy_rate`] = calcData.occupancy_rate;
+                }
+                if (calcData.maintenance_percent !== undefined) {
+                    data[`${prefix}maintenance_percent`] = calcData.maintenance_percent;
+                }
+                if (calcData.management_fee !== undefined) {
+                    data[`${prefix}management_fee`] = calcData.management_fee;
+                }
+                if (calcData.booking_fees !== undefined) {
+                    data[`${prefix}booking_fees`] = calcData.booking_fees;
+                }
+                if (calcData.cleaning_costs !== undefined) {
+                    data[`${prefix}cleaning_costs`] = calcData.cleaning_costs;
+                }
+                if (calcData.cleaning_fee !== undefined) {
+                    data[`${prefix}cleaning_fee`] = calcData.cleaning_fee;
+                }
+                if (calcData.tv_license !== undefined) {
+                    data[`${prefix}tv_license`] = calcData.tv_license;
+                }
             }
         }
         
@@ -677,8 +721,12 @@ async function generatePDFFile() {
             }
 
             // Debug logging
-            console.log('Frontend - selected_calculators:', data.selected_calculators);
-            console.log('Frontend - calculator_type:', data.calculator_type);
+            console.log('[Frontend] Sending to backend:', {
+                selected_calculators: data.selected_calculators,
+                calculator_type: data.calculator_type,
+                hasHolidayLet: data.selected_calculators?.includes('holiday-let'),
+                hasBRR: data.selected_calculators?.includes('brr')
+            });
             console.log('Frontend - is_brr_calculator:', data.is_brr_calculator);
             console.log('Frontend - calculator data keys:', Object.keys(data).filter(k => k.startsWith('calculator_') || k.startsWith('brr_')));
             console.log('Frontend - BRR fields count:', Object.keys(data).filter(k => k.startsWith('brr_')).length);
@@ -1882,6 +1930,7 @@ function updateCalculatorSelection() {
 }
 
 function createBRRCalculator(calculatorType) {
+    console.log('[Frontend] createBRRCalculator called for:', calculatorType);
     const section = document.createElement('div');
     section.className = 'calculator-fields-section propertyengine-calculator';
     section.dataset.calculator = calculatorType;
@@ -2310,8 +2359,20 @@ function createBRRCalculator(calculatorType) {
         </div>
     `;
     
+    // Verify element exists immediately after innerHTML
+    const testToggle = section.querySelector(`#${calculatorType}_detailed_view`);
+    console.log('[Frontend] Element check immediately after innerHTML:', {
+        calculatorType,
+        toggleId: `${calculatorType}_detailed_view`,
+        found: !!testToggle,
+        sectionHasContent: section.innerHTML.length > 0,
+        sectionChildren: section.children.length
+    });
+    
     // Add event listeners
+    console.log('[Frontend] Setting up event handlers for calculator:', calculatorType);
     setupBRRCalculatorEvents(section, calculatorType);
+    console.log('[Frontend] Event handlers set up for calculator:', calculatorType);
     
     // Ensure critical fields have direct event listeners as a backup
     // Do this after a short delay to ensure DOM is ready
@@ -2330,12 +2391,240 @@ function createBRRCalculator(calculatorType) {
     return section;
 }
 
+// Create Holiday Let calculator (similar structure to BRR)
+function createHolidayLetCalculator(calculatorType) {
+    console.log('[Frontend] createHolidayLetCalculator called for:', calculatorType);
+    
+    // Create section similar to BRR but with Holiday Let-specific fields
+    const section = document.createElement('div');
+    section.className = 'calculator-fields-section propertyengine-calculator';
+    section.dataset.calculator = calculatorType;
+    
+    // Get the BRR HTML and modify it for Holiday Let
+    const brrSection = createBRRCalculator(calculatorType);
+    section.innerHTML = brrSection.innerHTML;
+    
+    // Replace "Rental Income" section with "Income" section for Holiday Let
+    // Find all section titles and look for "Rental Income"
+    const allSectionTitles = section.querySelectorAll('h3.pe-section-title');
+    let rentalIncomeSection = null;
+    let rentalIncomeSectionContainer = null;
+    
+    allSectionTitles.forEach(title => {
+        if (title.textContent.trim() === 'Rental Income') {
+            rentalIncomeSection = title;
+            rentalIncomeSectionContainer = title.closest('.pe-section');
+        }
+    });
+    
+    if (rentalIncomeSection && rentalIncomeSectionContainer) {
+        console.log('[Frontend] Found Rental Income section, replacing with Income section');
+        rentalIncomeSection.textContent = 'Income';
+        
+        // Find the Monthly Rent field and replace with Nightly Rate and Occupancy Rate
+        const monthlyRentField = rentalIncomeSectionContainer.querySelector(`#${calculatorType}_monthly_rent`)?.closest('.pe-field');
+        const grossYieldField = rentalIncomeSectionContainer.querySelector(`#${calculatorType}_gross_yield`)?.closest('.pe-field');
+        
+        // Remove Gross Yield field if it exists
+        if (grossYieldField) {
+            console.log('[Frontend] Removing Gross Yield field from Income section');
+            grossYieldField.remove();
+        }
+        
+        if (monthlyRentField) {
+            console.log('[Frontend] Found Monthly Rent field, replacing with Nightly Rate');
+            monthlyRentField.innerHTML = `
+                <label class="pe-field-label required">Nightly Rate</label>
+                <input type="text" class="pe-input" id="${calculatorType}_nightly_rate" data-original-id="nightly_rate" data-calculator="${calculatorType}" placeholder="£ 0">
+            `;
+            
+            // Add Occupancy Rate field after Nightly Rate
+            const occupancyField = document.createElement('div');
+            occupancyField.className = 'pe-field';
+            occupancyField.innerHTML = `
+                <label class="pe-field-label">Annualised Occupancy Rate</label>
+                <input type="text" class="pe-input" id="${calculatorType}_occupancy_rate" data-original-id="occupancy_rate" data-calculator="${calculatorType}" value="70 %">
+            `;
+            
+            // Insert after Nightly Rate field
+            monthlyRentField.parentNode.insertBefore(occupancyField, monthlyRentField.nextSibling);
+        } else {
+            console.warn('[Frontend] Monthly Rent field not found in Rental Income section');
+        }
+    } else {
+        console.warn('[Frontend] Rental Income section not found. Available sections:', 
+            Array.from(section.querySelectorAll('h3.pe-section-title')).map(t => t.textContent.trim()));
+    }
+    
+    // Update Ongoing Costs section for Holiday Let
+    // Find all sections and look for Ongoing Costs (might be in detailed view)
+    const allSections = section.querySelectorAll('.pe-section');
+    let ongoingCostsSection = null;
+    let monthlyExpensesSection = null;
+    
+    allSections.forEach(sec => {
+        const title = sec.querySelector('h3.pe-section-title');
+        if (title) {
+            if (title.textContent === 'Ongoing Costs') {
+                ongoingCostsSection = sec;
+            } else if (title.textContent === 'Monthly Expenses') {
+                monthlyExpensesSection = sec;
+            }
+        }
+    });
+    
+    // If Ongoing Costs exists, replace it. Otherwise create new section
+    if (ongoingCostsSection) {
+        // Remove the 'pe-field-detailed' class to make it always visible
+        ongoingCostsSection.classList.remove('pe-field-detailed');
+        ongoingCostsSection.style.display = 'block';
+        
+        // Clear existing content but keep the title
+        const title = ongoingCostsSection.querySelector('h3.pe-section-title');
+        
+        // Create Annual Expenses subsection
+        const annualExpensesSubsection = document.createElement('div');
+        annualExpensesSubsection.className = 'pe-subsection';
+        annualExpensesSubsection.innerHTML = `
+            <h4 class="pe-subsection-title">Annual Expenses</h4>
+            <div class="pe-field">
+                <label class="pe-field-label">Council Tax</label>
+                <input type="text" class="pe-input" id="${calculatorType}_council_tax" data-original-id="council_tax" data-calculator="${calculatorType}" value="£ 1,670">
+            </div>
+            <div class="pe-field">
+                <label class="pe-field-label">% of Income on Maintenance</label>
+                <input type="text" class="pe-input" id="${calculatorType}_maintenance_percent" data-original-id="maintenance_percent" data-calculator="${calculatorType}" value="10 %">
+            </div>
+            <div class="pe-field">
+                <label class="pe-field-label" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                    <input type="checkbox" id="${calculatorType}_tv_license" data-original-id="tv_license" data-calculator="${calculatorType}" style="width: auto; margin: 0; cursor: pointer;">
+                    <span>TV License</span>
+                </label>
+            </div>
+            <a href="#" class="pe-link-add">+ Add additional annual expense</a>
+        `;
+        
+        // Create Monthly Expenses subsection
+        const monthlyExpensesSubsection = document.createElement('div');
+        monthlyExpensesSubsection.className = 'pe-subsection';
+        monthlyExpensesSubsection.innerHTML = `
+            <h4 class="pe-subsection-title">Monthly Expenses</h4>
+            <div class="pe-field">
+                <label class="pe-field-label">Mortgage Payments</label>
+                <input type="text" class="pe-input" id="${calculatorType}_ongoing_mortgage_payments" value="£ 0" readonly>
+            </div>
+            <div class="pe-field">
+                <label class="pe-field-label">Electric / Gas</label>
+                <input type="text" class="pe-input" id="${calculatorType}_utilities" data-original-id="utilities" data-calculator="${calculatorType}" value="£ 140">
+            </div>
+            <div class="pe-field">
+                <label class="pe-field-label">Water</label>
+                <input type="text" class="pe-input" id="${calculatorType}_water" data-original-id="water" data-calculator="${calculatorType}" value="£ 40">
+            </div>
+            <div class="pe-field">
+                <label class="pe-field-label">Broadband / TV</label>
+                <input type="text" class="pe-input" id="${calculatorType}_broadband_tv" data-original-id="broadband_tv" data-calculator="${calculatorType}" value="£ 60">
+            </div>
+            <div class="pe-field">
+                <label class="pe-field-label">Insurance</label>
+                <input type="text" class="pe-input" id="${calculatorType}_ongoing_insurance" data-original-id="ongoing_insurance" data-calculator="${calculatorType}" value="£ 40">
+            </div>
+            <div class="pe-field">
+                <label class="pe-field-label">Agent Fees</label>
+                <div class="pe-field-with-action">
+                    <input type="text" class="pe-input" id="${calculatorType}_agent_fees" data-original-id="agent_fees" data-calculator="${calculatorType}" value="0 %">
+                    <div class="pe-toggle-group">
+                        <button type="button" class="pe-toggle-small" data-fee-type="currency" data-fee-for="agent" data-calculator="${calculatorType}">£</button>
+                        <button type="button" class="pe-toggle-small pe-toggle-small-active" data-fee-type="percent" data-fee-for="agent" data-calculator="${calculatorType}">%</button>
+                    </div>
+                </div>
+            </div>
+            <div class="pe-field">
+                <label class="pe-field-label">Booking Fees</label>
+                <div class="pe-field-with-action">
+                    <input type="text" class="pe-input" id="${calculatorType}_booking_fees" data-original-id="booking_fees" data-calculator="${calculatorType}" value="12 %">
+                    <div class="pe-toggle-group">
+                        <button type="button" class="pe-toggle-small" data-fee-type="currency" data-fee-for="booking" data-calculator="${calculatorType}">£</button>
+                        <button type="button" class="pe-toggle-small pe-toggle-small-active" data-fee-type="percent" data-fee-for="booking" data-calculator="${calculatorType}">%</button>
+                    </div>
+                </div>
+            </div>
+            <div class="pe-field">
+                <label class="pe-field-label">Cleaning Costs</label>
+                <input type="text" class="pe-input" id="${calculatorType}_cleaning_costs" data-original-id="cleaning_costs" data-calculator="${calculatorType}" value="£ 80">
+            </div>
+            <a href="#" class="pe-link-add">+ Add additional monthly expense</a>
+        `;
+        
+        // Replace content - clear all children except title
+        Array.from(ongoingCostsSection.children).forEach(child => {
+            if (child.tagName !== 'H3') {
+                child.remove();
+            }
+        });
+        
+        // Add subsections
+        ongoingCostsSection.appendChild(annualExpensesSubsection);
+        ongoingCostsSection.appendChild(monthlyExpensesSubsection);
+    }
+    
+    // Remove the separate Monthly Expenses section if it exists (we've merged it into Ongoing Costs)
+    if (monthlyExpensesSection) {
+        monthlyExpensesSection.remove();
+    }
+    
+    // Update Exit Strategy to be blank for Holiday Let
+    const exitStrategySection = Array.from(section.querySelectorAll('.pe-section')).find(sec => {
+        const title = sec.querySelector('h3.pe-section-title');
+        return title && title.textContent === 'Exit Strategy';
+    });
+    
+    if (exitStrategySection) {
+        exitStrategySection.innerHTML = `
+            <h3 class="pe-section-title">Exit Strategy</h3>
+        `;
+    }
+    
+    // Set up event handlers (reuse BRR event handlers)
+    setupBRRCalculatorEvents(section, calculatorType);
+    
+    // Add specific event listeners for Holiday Let-specific fields
+    setTimeout(() => {
+        // TV License checkbox
+        const tvLicenseCheckbox = document.getElementById(`${calculatorType}_tv_license`);
+        if (tvLicenseCheckbox) {
+            tvLicenseCheckbox.addEventListener('change', () => {
+                calculateBRRValues(calculatorType);
+            });
+        }
+        
+        // Nightly Rate and Occupancy Rate fields (ensure they trigger calculations)
+        const nightlyRateInput = document.getElementById(`${calculatorType}_nightly_rate`);
+        const occupancyRateInput = document.getElementById(`${calculatorType}_occupancy_rate`);
+        
+        if (nightlyRateInput) {
+            nightlyRateInput.addEventListener('input', () => calculateBRRValues(calculatorType));
+            nightlyRateInput.addEventListener('change', () => calculateBRRValues(calculatorType));
+        }
+        
+        if (occupancyRateInput) {
+            occupancyRateInput.addEventListener('input', () => calculateBRRValues(calculatorType));
+            occupancyRateInput.addEventListener('change', () => calculateBRRValues(calculatorType));
+        }
+    }, 100);
+    
+    console.log('[Frontend] Holiday Let section created with custom fields, section exists:', !!section);
+    return section;
+}
+
 function setupBRRCalculatorEvents(section, calculatorType) {
+    console.log('[Frontend] setupBRRCalculatorEvents called for:', calculatorType, '| Section exists:', !!section);
     // Get financing payment field reference (used in multiple places)
     const financingPaymentField = section.querySelector(`#${calculatorType}_financing_payment_field`);
     
     // Detailed view toggle
     const detailedViewToggle = section.querySelector(`#${calculatorType}_detailed_view`);
+    console.log('[Frontend] Detailed view toggle found:', !!detailedViewToggle, '| Calculator type:', calculatorType);
     if (detailedViewToggle) {
         detailedViewToggle.addEventListener('change', (e) => {
             const detailedFields = section.querySelectorAll('.pe-field-detailed');
@@ -3344,11 +3633,14 @@ function calculateBRRValues(calculatorType) {
     
     // Get all input values
     const purchasePrice = parseCurrency(document.getElementById(`${calculatorType}_purchase_price`)?.value || '0');
-    const refurbCost = parseCurrency(document.getElementById(`${calculatorType}_refurb_cost`)?.value || '0');
+    const refurbCostInput = document.getElementById(`${calculatorType}_refurb_cost`);
+    const refurbEnabledCheckbox = document.getElementById(`${calculatorType}_refurb_enabled`);
+    const isRefurbEnabled = refurbEnabledCheckbox ? refurbEnabledCheckbox.checked : true; // Default to true if checkbox doesn't exist
+    const refurbCost = isRefurbEnabled ? parseCurrency(refurbCostInput?.value || '0') : 0;
     const estimatedMarketValue = parseCurrency(document.getElementById(`${calculatorType}_estimated_market_value`)?.value || '0');
     const monthlyRent = parseCurrency(document.getElementById(`${calculatorType}_monthly_rent`)?.value || '0');
     const bridgingInterest = parseCurrency(document.getElementById(`${calculatorType}_bridging_interest`)?.value || '0');
-    const vacantPeriod = parseFloat(document.getElementById(`${calculatorType}_vacant_period`)?.value || '0');
+    const vacantPeriod = isRefurbEnabled ? parseFloat(document.getElementById(`${calculatorType}_vacant_period`)?.value || '0') : 0;
     const appreciation = parseFloat(document.getElementById(`${calculatorType}_appreciation`)?.value?.replace('%', '') || '5.5');
     
     // Get financing type
@@ -3512,7 +3804,21 @@ function calculateBRRValues(calculatorType) {
     let idealPurchasePrice = estimatedMarketValue * 0.7; // Initial estimate
     
     // Rental calculations
-    const annualRent = monthlyRent * 12;
+    // For Holiday Let, calculate annual rent from nightly rate and occupancy rate
+    let annualRent = 0;
+    if (calculatorType === 'holiday-let') {
+        const nightlyRate = parseCurrency(document.getElementById(`${calculatorType}_nightly_rate`)?.value || '0');
+        const occupancyRateValue = document.getElementById(`${calculatorType}_occupancy_rate`)?.value || '0';
+        const occupancyRate = parseFloat(occupancyRateValue.replace(/[%\s]/g, '')) || 0;
+        
+        // Annual rent = nightly rate × 365 days × (occupancy rate / 100)
+        if (nightlyRate > 0 && occupancyRate > 0) {
+            annualRent = nightlyRate * 365 * (occupancyRate / 100);
+        }
+    } else {
+        // For BRR and other calculators, use monthly rent
+        annualRent = monthlyRent * 12;
+    }
     const grossYield = estimatedMarketValue > 0 ? (annualRent / estimatedMarketValue) * 100 : 0;
     
     // Expenses - read mortgage interest rates from inputs
@@ -3731,9 +4037,13 @@ function calculateBRRValues(calculatorType) {
     }
     
     // Add expenses during refurb to total investment (including bridging cost if applicable)
-    const expensesDuringRefurb = mortgagePaymentsDuringRefurb + refurbCouncilTaxDuringRefurb + refurbElectricGas + refurbWater + refurbInsurance + additionalAnnualExpensesDuringRefurb + additionalMonthlyExpensesDuringRefurb;
-    // For bridging finance, use bridging cost instead of mortgage payments during refurb
-    const expensesDuringRefurbFinal = financingType === 'bridging' ? bridgingCost + refurbCouncilTaxDuringRefurb + refurbElectricGas + refurbWater + refurbInsurance + additionalAnnualExpensesDuringRefurb + additionalMonthlyExpensesDuringRefurb : expensesDuringRefurb;
+    // Only include if refurb is enabled
+    let expensesDuringRefurbFinal = 0;
+    if (isRefurbEnabled) {
+        const expensesDuringRefurb = mortgagePaymentsDuringRefurb + refurbCouncilTaxDuringRefurb + refurbElectricGas + refurbWater + refurbInsurance + additionalAnnualExpensesDuringRefurb + additionalMonthlyExpensesDuringRefurb;
+        // For bridging finance, use bridging cost instead of mortgage payments during refurb
+        expensesDuringRefurbFinal = financingType === 'bridging' ? bridgingCost + refurbCouncilTaxDuringRefurb + refurbElectricGas + refurbWater + refurbInsurance + additionalAnnualExpensesDuringRefurb + additionalMonthlyExpensesDuringRefurb : expensesDuringRefurb;
+    }
     totalInvestment += expensesDuringRefurbFinal;
     
     // Log expenses during refurb and updated total investment
@@ -3751,20 +4061,96 @@ function calculateBRRValues(calculatorType) {
     console.log('  moneyLeftIn:', moneyLeftIn);
     
     // Calculate ongoing costs
-    // Maintenance (as % of income)
-    const maintenancePercentValue = document.getElementById(`${calculatorType}_maintenance_percent`)?.value || '10 %';
-    const maintenancePercent = parseFloat(maintenancePercentValue.replace(/[%\s]/g, '')) || 10;
-    const annualMaintenance = annualRent * (maintenancePercent / 100);
+    let annualMaintenance = 0;
+    let annualAgentFees = 0;
+    let annualInsurance = 0;
+    let annualCouncilTax = 0;
+    let annualTVLicense = 0;
+    let annualUtilities = 0;
+    let annualWater = 0;
+    let annualBroadband = 0;
+    let annualBookingFees = 0;
+    let annualCleaningCosts = 0;
     
-    // Agent fees (as % of income)
-    const agentFeesValue = document.getElementById(`${calculatorType}_agent_fees`)?.value || '10 %';
-    const agentFeesPercent = parseFloat(agentFeesValue.replace(/[%\s]/g, '')) || 10;
-    const annualAgentFees = annualRent * (agentFeesPercent / 100);
-    
-    // Insurance (monthly, convert to annual)
-    const ongoingInsuranceValue = document.getElementById(`${calculatorType}_ongoing_insurance`)?.value || '£ 40';
-    const monthlyInsurance = parseCurrency(ongoingInsuranceValue);
-    const annualInsurance = monthlyInsurance * 12;
+    if (calculatorType === 'holiday-let') {
+        // Holiday Let specific calculations
+        // Maintenance (as % of income)
+        const maintenancePercentValue = document.getElementById(`${calculatorType}_maintenance_percent`)?.value || '10 %';
+        const maintenancePercent = parseFloat(maintenancePercentValue.replace(/[%\s]/g, '')) || 10;
+        annualMaintenance = annualRent * (maintenancePercent / 100);
+        
+        // Council Tax (annual)
+        const councilTaxValue = document.getElementById(`${calculatorType}_council_tax`)?.value || '£ 1,670';
+        annualCouncilTax = parseCurrency(councilTaxValue);
+        
+        // TV License (if checked)
+        const tvLicenseCheckbox = document.getElementById(`${calculatorType}_tv_license`);
+        if (tvLicenseCheckbox && tvLicenseCheckbox.checked) {
+            annualTVLicense = 159; // Standard UK TV license fee
+        }
+        
+        // Electric / Gas (monthly, convert to annual)
+        const utilitiesValue = document.getElementById(`${calculatorType}_utilities`)?.value || '£ 140';
+        const monthlyUtilities = parseCurrency(utilitiesValue);
+        annualUtilities = monthlyUtilities * 12;
+        
+        // Water (monthly, convert to annual)
+        const waterValue = document.getElementById(`${calculatorType}_water`)?.value || '£ 40';
+        const monthlyWater = parseCurrency(waterValue);
+        annualWater = monthlyWater * 12;
+        
+        // Broadband / TV (monthly, convert to annual)
+        const broadbandValue = document.getElementById(`${calculatorType}_broadband_tv`)?.value || '£ 60';
+        const monthlyBroadband = parseCurrency(broadbandValue);
+        annualBroadband = monthlyBroadband * 12;
+        
+        // Insurance (monthly, convert to annual)
+        const ongoingInsuranceValue = document.getElementById(`${calculatorType}_ongoing_insurance`)?.value || '£ 40';
+        const monthlyInsurance = parseCurrency(ongoingInsuranceValue);
+        annualInsurance = monthlyInsurance * 12;
+        
+        // Agent Fees (as % of income or fixed amount)
+        const agentFeesValue = document.getElementById(`${calculatorType}_agent_fees`)?.value || '0 %';
+        const agentFeesPercent = parseFloat(agentFeesValue.replace(/[%\s]/g, '')) || 0;
+        // Check if it's a percentage (<= 100) or fixed amount
+        if (agentFeesPercent <= 100) {
+            annualAgentFees = annualRent * (agentFeesPercent / 100);
+        } else {
+            // Fixed monthly amount
+            annualAgentFees = agentFeesPercent * 12;
+        }
+        
+        // Booking Fees (as % of income)
+        const bookingFeesValue = document.getElementById(`${calculatorType}_booking_fees`)?.value || '12 %';
+        const bookingFeesPercent = parseFloat(bookingFeesValue.replace(/[%\s]/g, '')) || 12;
+        if (bookingFeesPercent <= 100) {
+            annualBookingFees = annualRent * (bookingFeesPercent / 100);
+        } else {
+            // Fixed monthly amount
+            annualBookingFees = bookingFeesPercent * 12;
+        }
+        
+        // Cleaning Costs (monthly, convert to annual)
+        const cleaningCostsValue = document.getElementById(`${calculatorType}_cleaning_costs`)?.value || '£ 80';
+        const monthlyCleaningCosts = parseCurrency(cleaningCostsValue);
+        annualCleaningCosts = monthlyCleaningCosts * 12;
+    } else {
+        // BRR and other calculators
+        // Maintenance (as % of income)
+        const maintenancePercentValue = document.getElementById(`${calculatorType}_maintenance_percent`)?.value || '10 %';
+        const maintenancePercent = parseFloat(maintenancePercentValue.replace(/[%\s]/g, '')) || 10;
+        annualMaintenance = annualRent * (maintenancePercent / 100);
+        
+        // Agent fees (as % of income)
+        const agentFeesValue = document.getElementById(`${calculatorType}_agent_fees`)?.value || '10 %';
+        const agentFeesPercent = parseFloat(agentFeesValue.replace(/[%\s]/g, '')) || 10;
+        annualAgentFees = annualRent * (agentFeesPercent / 100);
+        
+        // Insurance (monthly, convert to annual)
+        const ongoingInsuranceValue = document.getElementById(`${calculatorType}_ongoing_insurance`)?.value || '£ 40';
+        const monthlyInsurance = parseCurrency(ongoingInsuranceValue);
+        annualInsurance = monthlyInsurance * 12;
+    }
     
     // Ongoing mortgage payments (annual)
     const ongoingMortgagePaymentsValue = document.getElementById(`${calculatorType}_ongoing_mortgage_payments`)?.value || '£ 0';
@@ -3793,7 +4179,31 @@ function calculateBRRValues(calculatorType) {
     // For interest-only, this equals the interest
     // NOTE: bridgingCost is NOT included here - it's a one-time cost during vacant period, not an ongoing annual expense
     const annualMortgagePayments = monthlyMortgagePaymentRefi * 12;
-    const totalAnnualExpenses = annualMortgagePayments + annualMaintenance + annualAgentFees + annualInsurance + additionalAnnualExpenses + annualAdditionalMonthlyExpenses;
+    const totalAnnualExpenses = annualMortgagePayments + annualMaintenance + annualAgentFees + annualInsurance + 
+                                annualCouncilTax + annualTVLicense + annualUtilities + annualWater + annualBroadband + 
+                                annualBookingFees + annualCleaningCosts + 
+                                additionalAnnualExpenses + annualAdditionalMonthlyExpenses;
+    
+    // Debug logging for Holiday Let expenses
+    if (calculatorType === 'holiday-let') {
+        console.log('💰 Holiday Let Annual Expenses Breakdown:', {
+            annualMortgagePayments,
+            annualMaintenance,
+            annualAgentFees,
+            annualInsurance,
+            annualCouncilTax,
+            annualTVLicense,
+            annualUtilities,
+            annualWater,
+            annualBroadband,
+            annualBookingFees,
+            annualCleaningCosts,
+            additionalAnnualExpenses,
+            annualAdditionalMonthlyExpenses,
+            totalAnnualExpenses,
+            annualRent
+        });
+    }
     
     // Update ongoing mortgage payments field with refinance mortgage payments
     updateElement(`${calculatorType}_ongoing_mortgage_payments`, formatCurrency(monthlyMortgagePaymentRefi));
@@ -4096,6 +4506,7 @@ function formatCurrency(value) {
 }
 
 function showCalculatorFields(selectedCalculators) {
+    console.log('[Frontend] showCalculatorFields called with:', selectedCalculators);
     const fieldsContainer = document.getElementById('calculator-fields-list');
     const calculatorSection = document.getElementById('calculator-fields-container');
     const standardFields = document.getElementById('standard-fields');
@@ -4115,11 +4526,16 @@ function showCalculatorFields(selectedCalculators) {
     
     // Show fields for each selected calculator
     selectedCalculators.forEach(calculatorType => {
+        console.log('[Frontend] Processing calculator:', calculatorType);
         const config = calculatorConfigs[calculatorType];
-        if (!config) return;
+        if (!config) {
+            console.warn('[Frontend] No config found for calculator:', calculatorType);
+            return;
+        }
         
         // Special handling for BRR calculator - use PropertyEngine style
         if (calculatorType === 'brr') {
+            console.log('[Frontend] Creating BRR calculator section');
             const brrSection = createBRRCalculator(calculatorType);
             fieldsContainer.appendChild(brrSection);
             
@@ -4140,6 +4556,59 @@ function showCalculatorFields(selectedCalculators) {
                     setValue(`${calculatorType}_vacant_period`, mockData.vacant_period);
                     
                     calculateBRRValues(calculatorType);
+                }, 200);
+            }
+        } else if (calculatorType === 'holiday-let') {
+            // Special handling for Holiday Let calculator - use PropertyEngine style (similar to BRR)
+            console.log('[Frontend] Creating Holiday Let calculator section');
+            const holidayLetSection = createHolidayLetCalculator(calculatorType);
+            console.log('[Frontend] Holiday Let section created, appending to container');
+            fieldsContainer.appendChild(holidayLetSection);
+            console.log('[Frontend] Holiday Let section appended, checking event handlers...');
+            
+            // Verify event handlers are set up
+            setTimeout(() => {
+                // Try multiple ways to find the section
+                const sectionById = document.getElementById(`${calculatorType}_purchase_price`)?.closest('[data-calculator]');
+                const sectionByQuery = document.querySelector(`[data-calculator="${calculatorType}"]`);
+                const section = sectionById || sectionByQuery || holidayLetSection;
+                
+                const detailedViewToggleById = document.getElementById(`${calculatorType}_detailed_view`);
+                const detailedViewToggle = detailedViewToggleById || section?.querySelector(`#${calculatorType}_detailed_view`);
+                
+                console.log('[Frontend] Holiday Let event handler check:', {
+                    sectionExists: !!section,
+                    sectionById: !!sectionById,
+                    sectionByQuery: !!sectionByQuery,
+                    sectionDirect: !!holidayLetSection,
+                    detailedViewToggleExists: !!detailedViewToggle,
+                    detailedViewToggleById: !!detailedViewToggleById,
+                    toggleId: `${calculatorType}_detailed_view`,
+                    hasEventListeners: detailedViewToggle ? (detailedViewToggle.onchange !== null || detailedViewToggle.getAttribute('listener') === 'true') : false,
+                    allInputsInSection: section ? section.querySelectorAll('input').length : 0
+                });
+            }, 200);
+            
+            // Populate with mock data if available
+            if (window.mockDataStore) {
+                setTimeout(() => {
+                    const mockData = window.mockDataStore;
+                    const setValue = (id, value) => {
+                        const el = document.getElementById(id);
+                        if (el && value) el.value = value;
+                    };
+                    
+                    setValue(`${calculatorType}_purchase_price`, mockData.purchase_price);
+                    setValue(`${calculatorType}_refurb_cost`, mockData.refurb_cost);
+                    setValue(`${calculatorType}_estimated_market_value`, mockData.after_refurb_value || '£350,000');
+                    // Holiday Let specific: nightly rate instead of monthly rent
+                    // setValue(`${calculatorType}_nightly_rate`, mockData.nightly_rate);
+                    // setValue(`${calculatorType}_occupancy_rate`, mockData.occupancy_rate || '70');
+                    
+                    // Use BRR calculation function for now (can create separate one later)
+                    if (typeof calculateBRRValues === 'function') {
+                        calculateBRRValues(calculatorType);
+                    }
                 }, 200);
             }
         } else {
