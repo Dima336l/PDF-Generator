@@ -38,5 +38,3 @@ dist/
 # Generated PDFs
 *.pdf
 
-# Backend repo (separate repository)
-backend/
