@@ -289,6 +289,7 @@ function getFormData() {
                 'bridging_finance_required': getValue(`${calcType}_bridging_finance_required`),
                 
                 // Refurb
+                'refurb_enabled': document.getElementById(`${calcType}_refurb_enabled`)?.checked !== false, // Default to true if checkbox exists
                 'refurb_cost': getValue(`${calcType}_refurb_cost`, true),
                 'include_in_bridging': document.getElementById(`${calcType}_include_in_bridging`)?.classList.contains('pe-toggle-button-active') || false,
                 'vacant_period': getValue(`${calcType}_vacant_period`, true),
@@ -408,6 +409,11 @@ function getFormData() {
             Object.keys(calculatedFields).forEach(key => {
                 data[`brr_${key}`] = calculatedFields[key];
             });
+            
+            // Also add refurb_enabled to root level with brr_ prefix
+            if (calcData.refurb_enabled !== undefined) {
+                data[`brr_refurb_enabled`] = calcData.refurb_enabled;
+            }
         }
         
         data[`calculator_${calcType}`] = calcData;
