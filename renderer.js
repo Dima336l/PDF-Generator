@@ -245,6 +245,12 @@ function getFormData() {
         data.is_rent_to_hmo_calculator = true;
     }
     
+    // Explicitly set calculator_type to 'standard-btl' if Standard Buy to Let is selected
+    if (selectedCalculators.includes('standard-btl')) {
+        data.calculator_type = 'standard-btl';
+        data.is_standard_btl_calculator = true;
+    }
+    
     // Get calculator-specific data
     selectedCalculators.forEach(calcType => {
         const calcData = {};
@@ -256,8 +262,8 @@ function getFormData() {
             }
         });
         
-        // For BRR, Holiday Let, and Rent to HMO calculators, also include all calculated/displayed values and breakdowns
-        if (calcType === 'brr' || calcType === 'holiday-let' || calcType === 'rent-to-hmo') {
+        // For BRR, Holiday Let, Rent to HMO, and Standard Buy to Let calculators, also include all calculated/displayed values and breakdowns
+        if (calcType === 'brr' || calcType === 'holiday-let' || calcType === 'rent-to-hmo' || calcType === 'standard-btl') {
             // Get financing type (for BRR and Holiday Let only)
             let financingType = null;
             if (calcType === 'brr' || calcType === 'holiday-let') {
@@ -287,7 +293,7 @@ function getFormData() {
             
             // Get all displayed calculated values and breakdowns
             const calculatedFields = {
-                // Purchase section (BRR/Holiday Let) or Acquisition (Rent to HMO)
+                // Purchase section (BRR/Holiday Let/Standard BTL) or Acquisition (Rent to HMO)
                 'purchase_price': getValue(`${calcType}_purchase_price`, true),
                 'purchase_price_display': getValue(`${calcType}_purchase_price`, true),
                 'stamp_duty': getValue(`${calcType}_stamp_duty`),
@@ -295,6 +301,14 @@ function getFormData() {
                 'legal_fees': getValue(`${calcType}_legal_fees`, true),
                 'total_investment': getValue(`${calcType}_total_investment`),
                 'total_investment_required': getValue(`${calcType}_total_investment`),
+                
+                // Standard BTL specific - Financing
+                ...(calcType === 'standard-btl' ? {
+                    'financing_type': document.getElementById(`${calcType}_financing_type_hidden`)?.value || 'mortgage',
+                    'mortgage_payments': getValue(`${calcType}_mortgage_payments`, true),
+                    'refurb_enabled': document.getElementById(`${calcType}_refurb_enabled`)?.checked || false,
+                    'refurb_cost': getValue(`${calcType}_refurb_cost`, true),
+                } : {}),
                 
                 // Rent to HMO specific - Acquisition
                 'deposit': getValue(`${calcType}_deposit`, true),
@@ -391,6 +405,7 @@ function getFormData() {
                 // Metrics
                 'roi': getValue(`${calcType}_roi`),
                 'return_on_investment': getValue(`${calcType}_roi`),
+                'roi_display': getValue(`${calcType}_roi_display`),
                 'roce': getValue(`${calcType}_roce`),
                 'return_on_capital_employed': getValue(`${calcType}_roce`),
                 'net_yield': getValue(`${calcType}_net_yield`),
@@ -398,6 +413,27 @@ function getFormData() {
                 'appreciation': getValue(`${calcType}_appreciation`, true),
                 'annual_property_appreciation': getValue(`${calcType}_appreciation`, true),
             };
+            
+            // For Standard BTL, add simplified calculations
+            if (calcType === 'standard-btl') {
+                const purchasePriceNum = parseFloat(getValue(`${calcType}_purchase_price`, true).replace(/[£,\s]/g, '')) || 0;
+                const monthlyRentNum = parseFloat(getValue(`${calcType}_monthly_rent`, true).replace(/[£,\s]/g, '')) || 0;
+                const annualRent = monthlyRentNum * 12;
+                const mortgagePaymentsNum = parseFloat(getValue(`${calcType}_mortgage_payments`, true).replace(/[£,\s]/g, '')) || 0;
+                const annualMortgagePayments = mortgagePaymentsNum * 12;
+                const totalAnnualExpensesNum = annualMortgagePayments; // Simplified
+                const annualProfitNum = annualRent - totalAnnualExpensesNum;
+                const totalInvestmentNum = parseFloat(getValue(`${calcType}_total_investment`).replace(/[£,\s]/g, '')) || 0;
+                const roiNum = totalInvestmentNum > 0 ? (annualProfitNum / totalInvestmentNum) * 100 : 0;
+                const grossYieldNum = purchasePriceNum > 0 ? (annualRent / purchasePriceNum) * 100 : 0;
+                const netYieldNum = purchasePriceNum > 0 ? (annualProfitNum / purchasePriceNum) * 100 : 0;
+                
+                calculatedFields.total_annual_income = annualRent;
+                calculatedFields.gross_yield = `${grossYieldNum.toFixed(1)}%`;
+                calculatedFields.net_yield = `${netYieldNum.toFixed(1)}%`;
+                calculatedFields.roi = `${roiNum.toFixed(1)}%`;
+                calculatedFields.return_on_investment = `${roiNum.toFixed(1)}%`;
+            }
             
             // Calculate additional breakdown values for PDF
             // Only calculate financing-related values for BRR and Holiday Let
@@ -2071,6 +2107,709 @@ function updateCalculatorSelection() {
     
     // Show/hide calculator fields
     showCalculatorFields(selectedCalculators);
+}
+
+// Create Simple Buy to Let calculator
+function createSimpleBuyToLetCalculator(calculatorType) {
+    console.log('[Frontend] createSimpleBuyToLetCalculator called for:', calculatorType);
+    const section = document.createElement('div');
+    section.className = 'calculator-fields-section propertyengine-calculator';
+    section.dataset.calculator = calculatorType;
+    
+    section.innerHTML = `
+        <div class="pe-calculator-topbar">
+            <h2 class="pe-calculator-title">Buy to Let Calculator</h2>
+            <div class="pe-calculator-actions">
+                <label class="pe-switch-label">
+                    <input type="checkbox" class="pe-switch-detailed" id="${calculatorType}_detailed_view">
+                    <span>Switch to detailed view</span>
+                </label>
+                <button class="pe-btn-save">Save Calculator</button>
+                <div class="pe-roi-display">
+                    <div class="pe-roi-label">Return on Investment</div>
+                    <div class="pe-roi-value" id="${calculatorType}_roi">-%</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="pe-calculator-content">
+            <div class="pe-calculator-left">
+                <div class="pe-section">
+                    <h3 class="pe-section-title">Purchase</h3>
+                    <div class="pe-field">
+                        <label class="pe-field-label required">Purchase Price</label>
+                        <input type="text" class="pe-input" id="${calculatorType}_purchase_price" data-original-id="purchase_price" data-calculator="${calculatorType}" placeholder="Required">
+                    </div>
+                    <div class="pe-field">
+                        <label class="pe-field-label">Stamp Duty</label>
+                        <input type="text" class="pe-input" id="${calculatorType}_stamp_duty" data-original-id="stamp_duty" data-calculator="${calculatorType}" value="£ 0" readonly>
+                    </div>
+                    <div class="pe-field pe-field-detailed" style="display: none;">
+                        <label class="pe-field-label">Survey Costs</label>
+                        <input type="text" class="pe-input" id="${calculatorType}_survey_costs" data-original-id="survey_costs" data-calculator="${calculatorType}" value="£ 500">
+                    </div>
+                    <div class="pe-field pe-field-detailed" style="display: none;">
+                        <label class="pe-field-label">Legal Fees</label>
+                        <input type="text" class="pe-input" id="${calculatorType}_legal_fees" data-original-id="legal_fees" data-calculator="${calculatorType}" value="£ 1,500">
+                    </div>
+                    <div class="pe-field">
+                        <label class="pe-field-label">Total Investment Required</label>
+                        <div class="pe-field-with-action">
+                            <input type="text" class="pe-input" id="${calculatorType}_total_investment" value="£ 0" readonly>
+                            <button class="pe-btn-detail">Detail</button>
+                        </div>
+                    </div>
+                    <a href="#" class="pe-link-add pe-field-detailed" style="display: none;" id="${calculatorType}_add_purchase_cost">+ Add additional purchase cost</a>
+                </div>
+                
+                <div class="pe-section">
+                    <h3 class="pe-section-title">Financing</h3>
+                    <div class="pe-field pe-field-inline">
+                        <label class="pe-field-label">Type</label>
+                        <div class="pe-financing-type-group">
+                            <button type="button" class="pe-financing-type pe-financing-type-active" data-type="mortgage" data-calculator="${calculatorType}">
+                                <span class="pe-financing-check">✓</span>
+                                <span>Mortgage</span>
+                            </button>
+                            <button type="button" class="pe-financing-type" data-type="bridging" data-calculator="${calculatorType}">
+                                <span class="pe-financing-check">✓</span>
+                                <span>Bridging Finance</span>
+                            </button>
+                            <button type="button" class="pe-financing-type" data-type="cash" data-calculator="${calculatorType}">
+                                <span class="pe-financing-check">✓</span>
+                                <span>Cash</span>
+                            </button>
+                            <input type="hidden" name="${calculatorType}_financing_type" value="mortgage" id="${calculatorType}_financing_type_hidden">
+                        </div>
+                    </div>
+                    <div class="pe-field pe-field-detailed pe-field-mortgage" style="display: none;">
+                        <label class="pe-field-label">Mortgage Set-up Fee</label>
+                        <div class="pe-field-with-action">
+                            <input type="text" class="pe-input" id="${calculatorType}_mortgage_setup_fee" data-original-id="mortgage_setup_fee" data-calculator="${calculatorType}" value="£ 1,000">
+                            <div class="pe-toggle-group">
+                                <button type="button" class="pe-toggle-small pe-toggle-small-active" data-fee-type="currency" data-fee-for="mortgage" data-calculator="${calculatorType}">£</button>
+                                <button type="button" class="pe-toggle-small" data-fee-type="percent" data-fee-for="mortgage" data-calculator="${calculatorType}">%</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="pe-field pe-field-detailed pe-field-mortgage" style="display: none;">
+                        <label class="pe-field-label">Mortgage Loan to Value</label>
+                        <input type="text" class="pe-input" id="${calculatorType}_mortgage_ltv" data-original-id="mortgage_ltv" data-calculator="${calculatorType}" value="75 %">
+                    </div>
+                    <div class="pe-field pe-field-detailed pe-field-mortgage pe-field-inline" style="display: none;">
+                        <label class="pe-field-label">Mortgage Type</label>
+                        <div class="pe-financing-type-group">
+                            <button type="button" class="pe-financing-type pe-financing-type-active" data-mortgage-type="interest_only" data-calculator="${calculatorType}">
+                                <span class="pe-financing-check">✓</span>
+                                <span>Interest Only</span>
+                            </button>
+                            <button type="button" class="pe-financing-type" data-mortgage-type="repayment" data-calculator="${calculatorType}">
+                                <span class="pe-financing-check">✓</span>
+                                <span>Repayment</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="pe-field">
+                        <label class="pe-field-label">Mortgage Payments / pcm</label>
+                        <input type="text" class="pe-input" id="${calculatorType}_mortgage_payments" data-original-id="mortgage_payments" data-calculator="${calculatorType}" value="£ 0">
+                    </div>
+                    <div class="pe-field pe-field-detailed pe-field-mortgage" style="display: none;">
+                        <label class="pe-field-label">Mortgage Interest Rate (APR)</label>
+                        <input type="text" class="pe-input" id="${calculatorType}_mortgage_interest_rate" data-original-id="mortgage_interest_rate" data-calculator="${calculatorType}" value="5.5 %">
+                    </div>
+                    <div class="pe-field pe-field-detailed pe-field-mortgage pe-field-repayment" style="display: none;">
+                        <label class="pe-field-label">Mortgage Term (Years)</label>
+                        <input type="text" class="pe-input" id="${calculatorType}_mortgage_term_years" data-original-id="mortgage_term_years" data-calculator="${calculatorType}" value="25">
+                    </div>
+                    <div class="pe-field pe-field-detailed pe-field-mortgage" style="display: none;">
+                        <label class="pe-field-label">Mortgage Required</label>
+                        <input type="text" class="pe-input" id="${calculatorType}_mortgage_required" value="£ 0" readonly>
+                    </div>
+                </div>
+                
+                <div class="pe-section">
+                    <div class="pe-section-header">
+                        <h3 class="pe-section-title">Refurb</h3>
+                        <label class="pe-toggle">
+                            <input type="checkbox" class="pe-toggle-input" id="${calculatorType}_refurb_enabled">
+                            <span class="pe-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="pe-section-content" id="${calculatorType}_refurb_content" style="display: none;">
+                        <div class="pe-field">
+                            <label class="pe-field-label">Refurb Cost</label>
+                            <input type="text" class="pe-input" id="${calculatorType}_refurb_cost" data-original-id="refurb_cost" data-calculator="${calculatorType}" value="£ 0">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="pe-calculator-right">
+                <div class="pe-section pe-field-detailed" style="display: none;">
+                    <h3 class="pe-section-title">Refinance</h3>
+                    <div class="pe-field">
+                        <label class="pe-field-label">Estimated Market Value</label>
+                        <input type="text" class="pe-input" id="${calculatorType}_estimated_market_value" data-original-id="estimated_market_value" data-calculator="${calculatorType}" placeholder="£ 0">
+                    </div>
+                    <div class="pe-field">
+                        <label class="pe-field-label">Mortgage Set-up Fee</label>
+                        <div class="pe-field-with-action">
+                            <input type="text" class="pe-input" id="${calculatorType}_refinance_setup_fee" data-original-id="refinance_setup_fee" data-calculator="${calculatorType}" value="£ 0">
+                            <div class="pe-toggle-group">
+                                <button type="button" class="pe-toggle-small pe-toggle-small-active" data-fee-type="currency" data-fee-for="refinance" data-calculator="${calculatorType}">£</button>
+                                <button type="button" class="pe-toggle-small" data-fee-type="percent" data-fee-for="refinance" data-calculator="${calculatorType}">%</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="pe-field">
+                        <label class="pe-field-label">Mortgage Loan to Value</label>
+                        <input type="text" class="pe-input" id="${calculatorType}_refinance_ltv" data-original-id="refinance_ltv" data-calculator="${calculatorType}" value="75 %">
+                    </div>
+                    <div class="pe-field pe-field-inline">
+                        <label class="pe-field-label">Mortgage Type</label>
+                        <div class="pe-financing-type-group">
+                            <button type="button" class="pe-financing-type pe-financing-type-active" data-refinance-mortgage-type="interest_only" data-calculator="${calculatorType}">
+                                <span class="pe-financing-check">✓</span>
+                                <span>Interest Only</span>
+                            </button>
+                            <button type="button" class="pe-financing-type" data-refinance-mortgage-type="repayment" data-calculator="${calculatorType}">
+                                <span class="pe-financing-check">✓</span>
+                                <span>Repayment</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="pe-field">
+                        <label class="pe-field-label">Mortgage Payments / pcm</label>
+                        <input type="text" class="pe-input" id="${calculatorType}_refinance_mortgage_payments" value="£ 0" readonly>
+                    </div>
+                    <div class="pe-field">
+                        <label class="pe-field-label">Mortgage Interest Rate (APR)</label>
+                        <input type="text" class="pe-input" id="${calculatorType}_refinance_interest_rate" data-original-id="refinance_interest_rate" data-calculator="${calculatorType}" placeholder="5.5 %">
+                    </div>
+                    <div class="pe-field pe-field-refinance-repayment" style="display: none;">
+                        <label class="pe-field-label">Mortgage Term (Years)</label>
+                        <input type="text" class="pe-input" id="${calculatorType}_refinance_mortgage_term_years" data-original-id="refinance_mortgage_term_years" data-calculator="${calculatorType}" value="25">
+                    </div>
+                    <div class="pe-field">
+                        <label class="pe-field-label">Locked In Equity</label>
+                        <input type="text" class="pe-input" id="${calculatorType}_locked_in_equity" value="£ 0" readonly>
+                    </div>
+                    <div class="pe-field">
+                        <label class="pe-field-label">Money Left In</label>
+                        <input type="text" class="pe-input" id="${calculatorType}_money_left_in" value="£ 0" readonly>
+                    </div>
+                    <div class="pe-field">
+                        <label class="pe-field-label">Ideal Purchase Price (max)</label>
+                        <input type="text" class="pe-input" id="${calculatorType}_ideal_purchase_price" value="£ 0" readonly>
+                    </div>
+                    <div id="${calculatorType}_additional_refinance_costs"></div>
+                    <a href="#" class="pe-link-add" id="${calculatorType}_add_refinance_cost">+ Add additional refinance cost</a>
+                </div>
+                
+                <div class="pe-section">
+                    <h3 class="pe-section-title">Rental Income</h3>
+                    <div class="pe-field">
+                        <label class="pe-field-label required">Monthly Rent</label>
+                        <input type="text" class="pe-input" id="${calculatorType}_monthly_rent" data-original-id="monthly_rent" data-calculator="${calculatorType}" placeholder="Required">
+                    </div>
+                    <div class="pe-field">
+                        <label class="pe-field-label">Gross Yield</label>
+                        <input type="text" class="pe-input" id="${calculatorType}_gross_yield" value="-" readonly>
+                    </div>
+                </div>
+                
+                <div class="pe-section pe-field-detailed" style="display: none;">
+                    <h3 class="pe-section-title">Ongoing Costs</h3>
+                    <div class="pe-subsection">
+                        <h4 class="pe-subsection-title">Annual Expenses</h4>
+                        <div class="pe-field">
+                            <label class="pe-field-label">% of Income on Maintenance</label>
+                            <input type="text" class="pe-input" id="${calculatorType}_maintenance_percent" data-original-id="maintenance_percent" data-calculator="${calculatorType}" value="10 %">
+                        </div>
+                        <div id="${calculatorType}_additional_annual_expenses"></div>
+                        <a href="#" class="pe-link-add" id="${calculatorType}_add_annual_expense">+ Add additional annual expense</a>
+                    </div>
+                    <div class="pe-subsection">
+                        <h4 class="pe-subsection-title">Monthly Expenses</h4>
+                        <div class="pe-field">
+                            <label class="pe-field-label">Mortgage Payments</label>
+                            <input type="text" class="pe-input" id="${calculatorType}_ongoing_mortgage_payments" value="£ 0" readonly>
+                        </div>
+                        <div class="pe-field">
+                            <label class="pe-field-label">Insurance</label>
+                            <input type="text" class="pe-input" id="${calculatorType}_ongoing_insurance" data-original-id="ongoing_insurance" data-calculator="${calculatorType}" value="£ 40">
+                        </div>
+                        <div class="pe-field">
+                            <label class="pe-field-label">Agent Fees</label>
+                            <input type="text" class="pe-input" id="${calculatorType}_agent_fees" data-original-id="agent_fees" data-calculator="${calculatorType}" value="10 %">
+                            <div class="pe-toggle-group" style="display: inline-block; margin-left: 8px;">
+                                <button type="button" class="pe-toggle-small pe-toggle-small-active" data-fee-type="percent" data-fee-for="agent" data-calculator="${calculatorType}">%</button>
+                                <button type="button" class="pe-toggle-small" data-fee-type="currency" data-fee-for="agent" data-calculator="${calculatorType}">£</button>
+                            </div>
+                        </div>
+                        <div id="${calculatorType}_additional_monthly_expenses"></div>
+                        <a href="#" class="pe-link-add" id="${calculatorType}_add_monthly_expense">+ Add additional monthly expense</a>
+                    </div>
+                </div>
+                
+                <div class="pe-section">
+                    <h3 class="pe-section-title">Summary</h3>
+                    <div class="pe-field">
+                        <label class="pe-field-label">Total Annual Expenses</label>
+                        <div class="pe-field-with-action">
+                            <input type="text" class="pe-input" id="${calculatorType}_total_annual_expenses" value="£ 0" readonly>
+                            <button class="pe-btn-detail">Detail</button>
+                        </div>
+                    </div>
+                    <div class="pe-field">
+                        <label class="pe-field-label">Annual Profit</label>
+                        <input type="text" class="pe-input" id="${calculatorType}_annual_profit" value="£ 0" readonly>
+                    </div>
+                    <div class="pe-field">
+                        <label class="pe-field-label">Monthly Profit</label>
+                        <input type="text" class="pe-input" id="${calculatorType}_monthly_profit" value="£ 0" readonly>
+                    </div>
+                    <a href="#" class="pe-link-add pe-field-detailed" style="display: none;" id="${calculatorType}_edit_thresholds">Edit target thresholds</a>
+                </div>
+            </div>
+        </div>
+        
+        <div class="pe-metrics">
+            <h4 class="pe-metrics-section-title">Short Term Metrics</h4>
+            <div class="pe-metrics-short">
+                <div class="pe-metric-box">
+                    <div class="pe-metric-label">Gross yield</div>
+                    <div class="pe-metric-value" id="${calculatorType}_gross_yield_metric">-%</div>
+                    <span class="pe-info-icon" title="Gross yield">i</span>
+                </div>
+                <div class="pe-metric-box">
+                    <div class="pe-metric-label">Return on capital employed</div>
+                    <div class="pe-metric-value" id="${calculatorType}_roce">-%</div>
+                    <span class="pe-info-icon" title="Return on capital employed">i</span>
+                </div>
+                <div class="pe-metric-box">
+                    <div class="pe-metric-label">Net yield</div>
+                    <div class="pe-metric-value" id="${calculatorType}_net_yield">-%</div>
+                    <span class="pe-info-icon" title="Net yield">i</span>
+                </div>
+            </div>
+            <h4 class="pe-metrics-section-title">Long Term Rental Metrics</h4>
+            <div class="pe-metrics-long">
+                <div class="pe-metric-box pe-metric-box-blue">
+                    <div class="pe-metric-label">Equity in 10 years</div>
+                    <div class="pe-metric-value" id="${calculatorType}_equity_10_years">£0</div>
+                    <span class="pe-info-icon" title="Projected equity after 10 years">i</span>
+                </div>
+                <div class="pe-metrics-appreciation">
+                    <label class="pe-field-label">Annual Property Appreciation</label>
+                    <input type="text" class="pe-input pe-input-small" id="${calculatorType}_appreciation" value="5.5%" data-calculator="${calculatorType}">
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Setup event handlers
+    setupSimpleBuyToLetCalculatorEvents(section, calculatorType);
+    
+    return section;
+}
+
+function setupSimpleBuyToLetCalculatorEvents(section, calculatorType) {
+    console.log('[Frontend] setupSimpleBuyToLetCalculatorEvents called for:', calculatorType);
+    
+    // Detailed view toggle
+    const detailedViewToggle = section.querySelector(`#${calculatorType}_detailed_view`);
+    if (detailedViewToggle) {
+        detailedViewToggle.addEventListener('change', (e) => {
+            const isDetailed = e.target.checked;
+            const label = detailedViewToggle.parentElement.querySelector('span');
+            if (label) {
+                label.textContent = isDetailed ? 'Switch to simple view' : 'Switch to detailed view';
+            }
+            
+            // Show/hide detailed fields
+            const detailedFields = section.querySelectorAll('.pe-field-detailed');
+            detailedFields.forEach(field => {
+                field.style.display = isDetailed ? 'block' : 'none';
+            });
+            
+            // Show/hide detailed sections
+            const detailedSections = section.querySelectorAll('.pe-section.pe-field-detailed');
+            detailedSections.forEach(sec => {
+                sec.style.display = isDetailed ? 'block' : 'none';
+            });
+            
+            // Show/hide mortgage-specific fields based on financing type
+            const financingTypeHidden = section.querySelector(`#${calculatorType}_financing_type_hidden`);
+            const financingType = financingTypeHidden?.value || 'mortgage';
+            const mortgageFields = section.querySelectorAll('.pe-field-mortgage');
+            mortgageFields.forEach(field => {
+                if (isDetailed && financingType === 'mortgage') {
+                    field.style.display = 'block';
+                } else if (!isDetailed) {
+                    field.style.display = 'none';
+                } else {
+                    field.style.display = 'none';
+                }
+            });
+            
+            // Recalculate when toggling view
+            calculateSimpleBuyToLetValues(calculatorType);
+        });
+    }
+    
+    // Financing type buttons
+    const financingTypeButtons = section.querySelectorAll(`[data-type][data-calculator="${calculatorType}"]`);
+    financingTypeButtons.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            financingTypeButtons.forEach(b => b.classList.remove('pe-financing-type-active'));
+            btn.classList.add('pe-financing-type-active');
+            
+            const financingType = btn.dataset.type;
+            const hiddenInput = section.querySelector(`#${calculatorType}_financing_type_hidden`);
+            if (hiddenInput) {
+                hiddenInput.value = financingType;
+            }
+            
+            calculateSimpleBuyToLetValues(calculatorType);
+        });
+    });
+    
+    // Refurb toggle
+    const refurbToggle = section.querySelector(`#${calculatorType}_refurb_enabled`);
+    if (refurbToggle) {
+        refurbToggle.addEventListener('change', (e) => {
+            const content = section.querySelector(`#${calculatorType}_refurb_content`);
+            if (content) {
+                content.style.display = e.target.checked ? 'block' : 'none';
+            }
+            calculateSimpleBuyToLetValues(calculatorType);
+        });
+    }
+    
+    // Mortgage type buttons (Initial Financing)
+    const initialMortgageTypeButtons = section.querySelectorAll(`[data-mortgage-type][data-calculator="${calculatorType}"]`);
+    initialMortgageTypeButtons.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            initialMortgageTypeButtons.forEach(b => b.classList.remove('pe-financing-type-active'));
+            btn.classList.add('pe-financing-type-active');
+            
+            const mortgageType = btn.dataset.mortgageType;
+            const repaymentFields = section.querySelectorAll('.pe-field-repayment');
+            const detailedViewToggle = section.querySelector(`#${calculatorType}_detailed_view`);
+            const isDetailed = detailedViewToggle?.checked || false;
+            
+            if (isDetailed) {
+                repaymentFields.forEach(field => {
+                    field.style.display = mortgageType === 'repayment' ? 'block' : 'none';
+                });
+            }
+            
+            calculateSimpleBuyToLetValues(calculatorType);
+        });
+    });
+    
+    // Refinance mortgage type buttons
+    const refinanceMortgageTypeButtons = section.querySelectorAll(`[data-refinance-mortgage-type][data-calculator="${calculatorType}"]`);
+    refinanceMortgageTypeButtons.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            refinanceMortgageTypeButtons.forEach(b => b.classList.remove('pe-financing-type-active'));
+            btn.classList.add('pe-financing-type-active');
+            
+            const refinanceMortgageType = btn.dataset.refinanceMortgageType;
+            const refinanceRepaymentFields = section.querySelectorAll('.pe-field-refinance-repayment');
+            
+            refinanceRepaymentFields.forEach(field => {
+                field.style.display = refinanceMortgageType === 'repayment' ? 'block' : 'none';
+            });
+            
+            calculateSimpleBuyToLetValues(calculatorType);
+        });
+    });
+    
+    // Fee type toggles (Mortgage Set-up Fee, Refinance Set-up Fee, Agent Fees)
+    const feeTypeButtons = section.querySelectorAll(`[data-fee-type][data-calculator="${calculatorType}"]`);
+    feeTypeButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const feeFor = btn.dataset.feeFor;
+            const feeType = btn.dataset.feeType;
+            const feeButtons = section.querySelectorAll(`[data-fee-for="${feeFor}"][data-calculator="${calculatorType}"]`);
+            
+            feeButtons.forEach(b => b.classList.remove('pe-toggle-small-active'));
+            btn.classList.add('pe-toggle-small-active');
+            
+            // Update input value format based on selected type
+            let inputId = '';
+            if (feeFor === 'mortgage') {
+                inputId = `${calculatorType}_mortgage_setup_fee`;
+            } else if (feeFor === 'refinance') {
+                inputId = `${calculatorType}_refinance_setup_fee`;
+            } else if (feeFor === 'agent') {
+                inputId = `${calculatorType}_agent_fees`;
+            }
+            
+            const input = document.getElementById(inputId);
+            if (input) {
+                const currentValue = input.value.replace(/[£%\s,]/g, '');
+                if (feeType === 'currency') {
+                    input.value = `£ ${currentValue}`;
+                } else if (feeType === 'percent') {
+                    input.value = `${currentValue} %`;
+                }
+                input.dataset.feeType = feeType;
+            }
+            
+            calculateSimpleBuyToLetValues(calculatorType);
+        });
+    });
+    
+    // Update mortgage fields visibility when financing type changes
+    const updateMortgageFieldsVisibility = () => {
+        const financingTypeHidden = section.querySelector(`#${calculatorType}_financing_type_hidden`);
+        const financingType = financingTypeHidden?.value || 'mortgage';
+        const detailedViewToggle = section.querySelector(`#${calculatorType}_detailed_view`);
+        const isDetailed = detailedViewToggle?.checked || false;
+        const mortgageFields = section.querySelectorAll('.pe-field-mortgage');
+        
+        mortgageFields.forEach(field => {
+            if (isDetailed && financingType === 'mortgage') {
+                field.style.display = 'block';
+            } else {
+                field.style.display = 'none';
+            }
+        });
+    };
+    
+    // Update mortgage fields when financing type changes
+    financingTypeButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            setTimeout(updateMortgageFieldsVisibility, 50);
+        });
+    });
+    
+    // Add event listeners to all inputs
+    const allInputs = section.querySelectorAll('input, select');
+    allInputs.forEach(input => {
+        if (input.id && !input.readOnly && input.type !== 'checkbox') {
+            input.addEventListener('input', () => calculateSimpleBuyToLetValues(calculatorType));
+            input.addEventListener('change', () => calculateSimpleBuyToLetValues(calculatorType));
+        }
+    });
+}
+
+function calculateSimpleBuyToLetValues(calculatorType) {
+    console.log('[Frontend] calculateSimpleBuyToLetValues called for:', calculatorType);
+    
+    // Get input values
+    const purchasePrice = parseCurrency(document.getElementById(`${calculatorType}_purchase_price`)?.value || '0');
+    const surveyCosts = parseCurrency(document.getElementById(`${calculatorType}_survey_costs`)?.value || '0');
+    const legalFees = parseCurrency(document.getElementById(`${calculatorType}_legal_fees`)?.value || '0');
+    const monthlyRent = parseCurrency(document.getElementById(`${calculatorType}_monthly_rent`)?.value || '0');
+    
+    // Calculate stamp duty automatically (Buy to Let is an additional property)
+    let stampDuty = 0;
+    let stampDutyBreakdown = [];
+    if (purchasePrice > 0) {
+        // For Buy to Let, it's always an additional property (buy-to-let/second home)
+        // Use current rates (from 1st April 2025)
+        const isAdditionalProperty = true; // Buy to Let is always additional property
+        stampDuty = calculateStampDuty(purchasePrice, 'current', false, false, false, stampDutyBreakdown, isAdditionalProperty);
+    }
+    
+    // Update stamp duty field
+    const stampDutyEl = document.getElementById(`${calculatorType}_stamp_duty`);
+    if (stampDutyEl) {
+        stampDutyEl.value = formatCurrency(stampDuty);
+    }
+    
+    // Get financing type
+    const hiddenInput = document.getElementById(`${calculatorType}_financing_type_hidden`);
+    const financingType = hiddenInput?.value || 'mortgage';
+    
+    // Get refurb info
+    const refurbToggle = document.getElementById(`${calculatorType}_refurb_enabled`);
+    const isRefurbEnabled = refurbToggle ? refurbToggle.checked : false;
+    const refurbCost = isRefurbEnabled ? parseCurrency(document.getElementById(`${calculatorType}_refurb_cost`)?.value || '0') : 0;
+    
+    // Calculate mortgage amount based on LTV
+    let mortgageAmount = 0;
+    let mortgageSetupFee = 0;
+    if (financingType === 'mortgage') {
+        const mortgageLTV = parseFloat(document.getElementById(`${calculatorType}_mortgage_ltv`)?.value?.replace(/[%\s]/g, '') || '75');
+        mortgageAmount = purchasePrice * (mortgageLTV / 100);
+        
+        // Get mortgage setup fee
+        const mortgageSetupFeeValue = document.getElementById(`${calculatorType}_mortgage_setup_fee`)?.value || '£ 1,000';
+        if (mortgageSetupFeeValue.includes('%')) {
+            const percent = parseFloat(mortgageSetupFeeValue.replace(/[%\s]/g, '')) || 0;
+            mortgageSetupFee = mortgageAmount * (percent / 100);
+        } else {
+            mortgageSetupFee = parseCurrency(mortgageSetupFeeValue);
+        }
+    }
+    
+    // Calculate mortgage payments
+    let monthlyMortgagePayment = 0;
+    if (mortgageAmount > 0) {
+        const mortgageInterestRateValue = document.getElementById(`${calculatorType}_mortgage_interest_rate`)?.value || '5.5 %';
+        const mortgageInterestRate = parseFloat(mortgageInterestRateValue.replace(/[%\s]/g, '')) || 5.5;
+        
+        const mortgageTypeBtn = document.querySelector(`[data-mortgage-type="repayment"][data-calculator="${calculatorType}"]`);
+        const isRepayment = mortgageTypeBtn?.classList.contains('pe-financing-type-active') || false;
+        
+        if (isRepayment) {
+            const mortgageTermYears = parseFloat(document.getElementById(`${calculatorType}_mortgage_term_years`)?.value || '25');
+            const monthlyRate = (mortgageInterestRate / 100) / 12;
+            const numberOfPayments = mortgageTermYears * 12;
+            
+            if (monthlyRate > 0) {
+                monthlyMortgagePayment = mortgageAmount * (monthlyRate * Math.pow(1 + monthlyRate, numberOfPayments)) /
+                                        (Math.pow(1 + monthlyRate, numberOfPayments) - 1);
+            } else {
+                monthlyMortgagePayment = mortgageAmount / numberOfPayments;
+            }
+        } else {
+            // Interest-only
+            monthlyMortgagePayment = mortgageAmount * (mortgageInterestRate / 100) / 12;
+        }
+    }
+    
+    // Calculate deposit
+    const deposit = purchasePrice - mortgageAmount;
+    
+    // Calculate total investment = deposit + stamp duty + survey costs + legal fees + mortgage setup fee + refurb cost
+    const totalInvestment = deposit + stampDuty + surveyCosts + legalFees + mortgageSetupFee + refurbCost;
+    
+    // Calculate annual rent
+    const annualRent = monthlyRent * 12;
+    
+    // Calculate gross yield
+    const grossYield = purchasePrice > 0 ? (annualRent / purchasePrice) * 100 : 0;
+    
+    // Calculate annual expenses
+    const annualMortgagePayments = monthlyMortgagePayment * 12;
+    
+    // Get ongoing costs (from detailed view if available)
+    const maintenancePercentValue = document.getElementById(`${calculatorType}_maintenance_percent`)?.value || '10 %';
+    const maintenancePercent = parseFloat(maintenancePercentValue.replace(/[%\s]/g, '')) || 10;
+    const annualMaintenance = annualRent * (maintenancePercent / 100);
+    
+    const ongoingInsuranceValue = document.getElementById(`${calculatorType}_ongoing_insurance`)?.value || '£ 40';
+    const monthlyInsurance = parseCurrency(ongoingInsuranceValue);
+    const annualInsurance = monthlyInsurance * 12;
+    
+    // Agent fees
+    let annualAgentFees = 0;
+    const agentFeesValue = document.getElementById(`${calculatorType}_agent_fees`)?.value || '10 %';
+    const agentFeesInput = document.getElementById(`${calculatorType}_agent_fees`);
+    let agentFeeType = 'percent';
+    if (agentFeesInput) {
+        agentFeeType = agentFeesInput.dataset.feeType || 'percent';
+        const activeToggle = document.querySelector(`[data-fee-for="agent"][data-calculator="${calculatorType}"].pe-toggle-small-active`);
+        if (activeToggle) {
+            agentFeeType = activeToggle.dataset.feeType || 'percent';
+        }
+    }
+    
+    if (agentFeeType === 'percent') {
+        const agentFeePercent = parseFloat(agentFeesValue.replace(/[%\s]/g, '')) || 10;
+        annualAgentFees = annualRent * (agentFeePercent / 100);
+    } else {
+        const monthlyAgentFees = parseCurrency(agentFeesValue);
+        annualAgentFees = monthlyAgentFees * 12;
+    }
+    
+    const totalAnnualExpenses = annualMortgagePayments + annualMaintenance + annualInsurance + annualAgentFees;
+    
+    // Calculate profits
+    const annualProfit = annualRent - totalAnnualExpenses;
+    const monthlyProfit = annualProfit / 12;
+    
+    // Calculate ROI and ROCE (same for BTL - based on total investment)
+    const roi = totalInvestment > 0 ? (annualProfit / totalInvestment) * 100 : 0;
+    const roce = roi; // For BTL, ROCE is the same as ROI
+    
+    // Calculate net yield
+    const netYield = purchasePrice > 0 ? (annualProfit / purchasePrice) * 100 : 0;
+    
+    // Calculate equity in 10 years
+    const appreciationValue = document.getElementById(`${calculatorType}_appreciation`)?.value || '5.5%';
+    const appreciation = parseFloat(appreciationValue.replace(/[%\s]/g, '')) || 5.5;
+    const futurePropertyValue = purchasePrice * Math.pow(1 + appreciation / 100, 10);
+    
+    // Mortgage balance after 10 years
+    let mortgageBalance10Years = mortgageAmount; // Default for interest-only
+    if (mortgageAmount > 0) {
+        const mortgageTypeBtn = document.querySelector(`[data-mortgage-type="repayment"][data-calculator="${calculatorType}"]`);
+        const isRepayment = mortgageTypeBtn?.classList.contains('pe-financing-type-active') || false;
+        
+        if (isRepayment) {
+            const mortgageInterestRateValue = document.getElementById(`${calculatorType}_mortgage_interest_rate`)?.value || '5.5 %';
+            const mortgageInterestRate = parseFloat(mortgageInterestRateValue.replace(/[%\s]/g, '')) || 5.5;
+            const mortgageTermYears = parseFloat(document.getElementById(`${calculatorType}_mortgage_term_years`)?.value || '25');
+            
+            const monthlyRate = mortgageInterestRate / 100 / 12;
+            const totalMonths = mortgageTermYears * 12;
+            const monthsPaid = 10 * 12;
+            
+            if (totalMonths > monthsPaid && monthlyRate > 0) {
+                const balanceFactor = (Math.pow(1 + monthlyRate, totalMonths) - Math.pow(1 + monthlyRate, monthsPaid)) / 
+                                     (Math.pow(1 + monthlyRate, totalMonths) - 1);
+                mortgageBalance10Years = mortgageAmount * balanceFactor;
+            } else if (totalMonths <= monthsPaid) {
+                mortgageBalance10Years = 0;
+            }
+        }
+    }
+    
+    const equity10Years = futurePropertyValue - mortgageBalance10Years;
+    
+    // Update display fields
+    const totalInvestmentEl = document.getElementById(`${calculatorType}_total_investment`);
+    if (totalInvestmentEl) totalInvestmentEl.value = formatCurrency(totalInvestment);
+    
+    const mortgageRequiredEl = document.getElementById(`${calculatorType}_mortgage_required`);
+    if (mortgageRequiredEl) mortgageRequiredEl.value = formatCurrency(mortgageAmount);
+    
+    const mortgagePaymentsEl = document.getElementById(`${calculatorType}_mortgage_payments`);
+    if (mortgagePaymentsEl) mortgagePaymentsEl.value = formatCurrency(monthlyMortgagePayment);
+    
+    const ongoingMortgagePaymentsEl = document.getElementById(`${calculatorType}_ongoing_mortgage_payments`);
+    if (ongoingMortgagePaymentsEl) ongoingMortgagePaymentsEl.value = formatCurrency(monthlyMortgagePayment);
+    
+    const grossYieldEl = document.getElementById(`${calculatorType}_gross_yield`);
+    if (grossYieldEl) grossYieldEl.value = `${grossYield.toFixed(1)}%`;
+    
+    const totalAnnualExpensesEl = document.getElementById(`${calculatorType}_total_annual_expenses`);
+    if (totalAnnualExpensesEl) totalAnnualExpensesEl.value = formatCurrency(totalAnnualExpenses);
+    
+    const annualProfitEl = document.getElementById(`${calculatorType}_annual_profit`);
+    if (annualProfitEl) annualProfitEl.value = formatCurrency(annualProfit);
+    
+    const monthlyProfitEl = document.getElementById(`${calculatorType}_monthly_profit`);
+    if (monthlyProfitEl) monthlyProfitEl.value = formatCurrency(monthlyProfit);
+    
+    const roiDisplayEl = document.getElementById(`${calculatorType}_roi_display`);
+    if (roiDisplayEl) roiDisplayEl.value = `${roi.toFixed(1)}%`;
+    
+    const roiTopEl = document.getElementById(`${calculatorType}_roi`);
+    if (roiTopEl) roiTopEl.textContent = `${roi.toFixed(1)}%`;
+    
+    // Update metrics
+    const roceEl = document.getElementById(`${calculatorType}_roce`);
+    if (roceEl) roceEl.textContent = `${roce.toFixed(1)}%`;
+    
+    const grossYieldMetricEl = document.getElementById(`${calculatorType}_gross_yield_metric`);
+    if (grossYieldMetricEl) grossYieldMetricEl.textContent = `${grossYield.toFixed(1)}%`;
+    
+    const netYieldEl = document.getElementById(`${calculatorType}_net_yield`);
+    if (netYieldEl) netYieldEl.textContent = `${netYield.toFixed(2)}%`;
+    
+    const equity10YearsEl = document.getElementById(`${calculatorType}_equity_10_years`);
+    if (equity10YearsEl) equity10YearsEl.textContent = formatCurrency(equity10Years);
 }
 
 function createBRRCalculator(calculatorType) {
@@ -5487,8 +6226,19 @@ function showCalculatorFields(selectedCalculators) {
             return;
         }
         
+        // Special handling for Standard Buy to Let calculator - use simple view
+        if (calculatorType === 'standard-btl') {
+            console.log('[Frontend] Creating Simple Buy to Let calculator section');
+            const btlSection = createSimpleBuyToLetCalculator(calculatorType);
+            fieldsContainer.appendChild(btlSection);
+            
+            // Initial calculation
+            setTimeout(() => {
+                calculateSimpleBuyToLetValues(calculatorType);
+            }, 100);
+        }
         // Special handling for BRR calculator - use PropertyEngine style
-        if (calculatorType === 'brr') {
+        else if (calculatorType === 'brr') {
             console.log('[Frontend] Creating BRR calculator section');
             const brrSection = createBRRCalculator(calculatorType);
             fieldsContainer.appendChild(brrSection);
