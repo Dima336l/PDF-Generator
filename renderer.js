@@ -239,6 +239,12 @@ function getFormData() {
         data.is_holiday_let_calculator = true;
     }
     
+    // Explicitly set calculator_type to 'rent-to-hmo' if Rent to HMO is selected
+    if (selectedCalculators.includes('rent-to-hmo')) {
+        data.calculator_type = 'rent-to-hmo';
+        data.is_rent_to_hmo_calculator = true;
+    }
+    
     // Get calculator-specific data
     selectedCalculators.forEach(calcType => {
         const calcData = {};
@@ -250,13 +256,24 @@ function getFormData() {
             }
         });
         
-        // For BRR and Holiday Let calculators, also include all calculated/displayed values and breakdowns
-        if (calcType === 'brr' || calcType === 'holiday-let') {
-            // Get financing type
-            const financingTypeHidden = document.getElementById(`${calcType}_financing_type_hidden`);
-            const financingType = financingTypeHidden?.value || (calcType === 'holiday-let' ? 'mortgage' : 'bridging');
-            calcData.financing_type = financingType;
-            calcData.chosen_financing = financingType === 'mortgage' ? 'Mortgage' : (financingType === 'bridging' ? 'Bridging Finance' : 'Cash');
+        // For BRR, Holiday Let, and Rent to HMO calculators, also include all calculated/displayed values and breakdowns
+        if (calcType === 'brr' || calcType === 'holiday-let' || calcType === 'rent-to-hmo') {
+            // Get financing type (for BRR and Holiday Let only)
+            let financingType = null;
+            if (calcType === 'brr' || calcType === 'holiday-let') {
+                const financingTypeHidden = document.getElementById(`${calcType}_financing_type_hidden`);
+                financingType = financingTypeHidden?.value || (calcType === 'holiday-let' ? 'mortgage' : 'bridging');
+                calcData.financing_type = financingType;
+                calcData.chosen_financing = financingType === 'mortgage' ? 'Mortgage' : (financingType === 'bridging' ? 'Bridging Finance' : 'Cash');
+            }
+            
+            // For Rent to HMO, get strategy instead
+            if (calcType === 'rent-to-hmo') {
+                const strategySelect = document.getElementById(`${calcType}_chosen_strategy`);
+                const strategy = strategySelect?.value || 'hmo';
+                calcData.chosen_strategy = strategy;
+                calcData.strategy = strategy === 'holiday-let' ? 'Holiday Let' : 'HMO';
+            }
             
             // Helper function to get value from element (handles both input and text content)
             const getValue = (id, isInput = false) => {
@@ -270,7 +287,7 @@ function getFormData() {
             
             // Get all displayed calculated values and breakdowns
             const calculatedFields = {
-                // Purchase section
+                // Purchase section (BRR/Holiday Let) or Acquisition (Rent to HMO)
                 'purchase_price': getValue(`${calcType}_purchase_price`, true),
                 'purchase_price_display': getValue(`${calcType}_purchase_price`, true),
                 'stamp_duty': getValue(`${calcType}_stamp_duty`),
@@ -278,6 +295,10 @@ function getFormData() {
                 'legal_fees': getValue(`${calcType}_legal_fees`, true),
                 'total_investment': getValue(`${calcType}_total_investment`),
                 'total_investment_required': getValue(`${calcType}_total_investment`),
+                
+                // Rent to HMO specific - Acquisition
+                'deposit': getValue(`${calcType}_deposit`, true),
+                'reference_fees': getValue(`${calcType}_reference_fees`, true),
                 
                 // Initial Financing - Mortgage
                 'mortgage_setup_fee': getValue(`${calcType}_mortgage_setup_fee`, true),
@@ -318,11 +339,28 @@ function getFormData() {
                 'money_left_in': getValue(`${calcType}_money_left_in`),
                 'ideal_purchase_price': getValue(`${calcType}_ideal_purchase_price`),
                 
-                // Rental Income
+                // Rental Income / Income
                 'monthly_rent': getValue(`${calcType}_monthly_rent`, true),
-                'nightly_rate': getValue(`${calcType}_nightly_rate`, true), // Holiday Let specific
-                'occupancy_rate': getValue(`${calcType}_occupancy_rate`, true), // Holiday Let specific
+                'nightly_rate': getValue(`${calcType}_nightly_rate`, true), // Holiday Let / Rent to HMO specific
+                'occupancy_rate': getValue(`${calcType}_occupancy_rate`, true), // Holiday Let / Rent to HMO specific
                 'gross_yield': getValue(`${calcType}_gross_yield`),
+                'total_rental_income': getValue(`${calcType}_total_rental_income`), // Rent to HMO specific
+                
+                // Rent to HMO specific - Room rents (collect all room rents)
+                ...(calcType === 'rent-to-hmo' ? (() => {
+                    const roomRents = {};
+                    for (let i = 1; i <= 10; i++) {
+                        const roomRent = getValue(`${calcType}_room_${i}_rent`, true);
+                        if (roomRent) {
+                            roomRents[`room_${i}_rent`] = roomRent;
+                        }
+                    }
+                    return roomRents;
+                })() : {}),
+                
+                // Rent to HMO specific - Strategy and Rent to Owner
+                'chosen_strategy': calcType === 'rent-to-hmo' ? getValue(`${calcType}_chosen_strategy`, true) : undefined,
+                'monthly_rent_to_owner': calcType === 'rent-to-hmo' ? getValue(`${calcType}_monthly_rent_to_owner`, true) : undefined,
                 
                 // Ongoing Costs
                 'maintenance_percent': getValue(`${calcType}_maintenance_percent`, true),
@@ -333,7 +371,15 @@ function getFormData() {
                 'cleaning_costs': getValue(`${calcType}_cleaning_costs`, true), // Holiday Let specific
                 'cleaning_fee': getValue(`${calcType}_cleaning_fee`, true), // Holiday Let specific (alternative field name)
                 'tv_license': document.getElementById(`${calcType}_tv_license`)?.checked || false, // Holiday Let specific
+                'communal_tv_license': document.getElementById(`${calcType}_communal_tv_license`)?.checked || false, // Rent to HMO specific
                 'ongoing_mortgage_payments': getValue(`${calcType}_ongoing_mortgage_payments`),
+                
+                // Rent to HMO specific - Ongoing Costs
+                'council_tax': getValue(`${calcType}_council_tax`, true), // Rent to HMO specific
+                'utilities': getValue(`${calcType}_utilities`, true), // Rent to HMO specific
+                'water': getValue(`${calcType}_water`, true), // Rent to HMO specific
+                'broadband_tv': getValue(`${calcType}_broadband_tv`, true), // Rent to HMO specific
+                'insurance': getValue(`${calcType}_insurance`, true), // Rent to HMO specific
                 
                 // Summary
                 'total_annual_expenses': getValue(`${calcType}_total_annual_expenses`, true),
@@ -354,22 +400,46 @@ function getFormData() {
             };
             
             // Calculate additional breakdown values for PDF
-            // Parse numeric values for calculations
-            const purchasePriceNum = parseFloat(getValue(`${calcType}_purchase_price`, true).replace(/[£,\s]/g, '')) || 0;
-            const mortgageRequiredStr = getValue(`${calcType}_mortgage_required`);
-            const bridgingRequiredStr = getValue(`${calcType}_bridging_finance_required`);
-            const initialMortgageNum = parseFloat((financingType === 'mortgage' ? mortgageRequiredStr : bridgingRequiredStr).replace(/[£,\s]/g, '')) || 0;
-            const depositAmount = purchasePriceNum - initialMortgageNum;
-            
-            // Add calculated breakdown values
-            calculatedFields.deposit_amount = depositAmount;
-            calculatedFields.deposit_percent = purchasePriceNum > 0 ? ((depositAmount / purchasePriceNum) * 100).toFixed(1) : '0';
-            calculatedFields.finance_required = financingType === 'mortgage' ? getValue(`${calcType}_mortgage_required`) : getValue(`${calcType}_bridging_finance_required`);
-            calculatedFields.monthly_payments = financingType === 'mortgage' ? getValue(`${calcType}_mortgage_payments`) : getValue(`${calcType}_bridging_interest`, true);
-            calculatedFields.outstanding_finance_balance = initialMortgageNum; // Initial mortgage/bridging amount
-            calculatedFields.new_mortgage_amount = parseFloat(getValue(`${calcType}_estimated_market_value`).replace(/[£,\s]/g, '')) * (parseFloat(getValue(`${calcType}_refinance_ltv`, true).replace(/[%\s]/g, '')) || 75) / 100;
-            calculatedFields.new_monthly_payments = getValue(`${calcType}_refinance_mortgage_payments`);
-            calculatedFields.total_annual_income = (parseFloat(getValue(`${calcType}_monthly_rent`, true).replace(/[£,\s]/g, '')) || 0) * 12;
+            // Only calculate financing-related values for BRR and Holiday Let
+            if (calcType === 'brr' || calcType === 'holiday-let') {
+                // Parse numeric values for calculations
+                const purchasePriceNum = parseFloat(getValue(`${calcType}_purchase_price`, true).replace(/[£,\s]/g, '')) || 0;
+                const mortgageRequiredStr = getValue(`${calcType}_mortgage_required`);
+                const bridgingRequiredStr = getValue(`${calcType}_bridging_finance_required`);
+                const initialMortgageNum = parseFloat((financingType === 'mortgage' ? mortgageRequiredStr : bridgingRequiredStr).replace(/[£,\s]/g, '')) || 0;
+                const depositAmount = purchasePriceNum - initialMortgageNum;
+                
+                // Add calculated breakdown values
+                calculatedFields.deposit_amount = depositAmount;
+                calculatedFields.deposit_percent = purchasePriceNum > 0 ? ((depositAmount / purchasePriceNum) * 100).toFixed(1) : '0';
+                calculatedFields.finance_required = financingType === 'mortgage' ? getValue(`${calcType}_mortgage_required`) : getValue(`${calcType}_bridging_finance_required`);
+                calculatedFields.monthly_payments = financingType === 'mortgage' ? getValue(`${calcType}_mortgage_payments`) : getValue(`${calcType}_bridging_interest`, true);
+                calculatedFields.outstanding_finance_balance = initialMortgageNum; // Initial mortgage/bridging amount
+                calculatedFields.new_mortgage_amount = parseFloat(getValue(`${calcType}_estimated_market_value`).replace(/[£,\s]/g, '')) * (parseFloat(getValue(`${calcType}_refinance_ltv`, true).replace(/[%\s]/g, '')) || 75) / 100;
+                calculatedFields.new_monthly_payments = getValue(`${calcType}_refinance_mortgage_payments`);
+                calculatedFields.total_annual_income = (parseFloat(getValue(`${calcType}_monthly_rent`, true).replace(/[£,\s]/g, '')) || 0) * 12;
+            } else if (calcType === 'rent-to-hmo') {
+                // For Rent to HMO, calculate deposit from deposit field
+                const depositNum = parseFloat(getValue(`${calcType}_deposit`, true).replace(/[£,\s]/g, '')) || 0;
+                calculatedFields.deposit_amount = depositNum;
+                
+                // Calculate total annual income based on strategy
+                const strategy = calcData.chosen_strategy || 'hmo';
+                if (strategy === 'holiday-let') {
+                    const nightlyRate = parseFloat(getValue(`${calcType}_nightly_rate`, true).replace(/[£,\s]/g, '')) || 0;
+                    const occupancyRateValue = getValue(`${calcType}_occupancy_rate`, true) || '70 %';
+                    const occupancyRate = parseFloat(occupancyRateValue.replace(/[%\s]/g, '')) || 70;
+                    calculatedFields.total_annual_income = nightlyRate * 365 * (occupancyRate / 100);
+                } else {
+                    // HMO: sum of all room rents * 12
+                    let totalMonthlyRent = 0;
+                    for (let i = 1; i <= 10; i++) {
+                        const roomRent = parseFloat(getValue(`${calcType}_room_${i}_rent`, true).replace(/[£,\s]/g, '')) || 0;
+                        totalMonthlyRent += roomRent;
+                    }
+                    calculatedFields.total_annual_income = totalMonthlyRent * 12;
+                }
+            }
             
             // Expenses during refurb breakdown
             const vacantPeriodNum = parseFloat(getValue(`${calcType}_vacant_period`, true)) || 0;
@@ -384,38 +454,50 @@ function getFormData() {
             calculatedFields.water_during_refurb = waterDuringRefurb;
             calculatedFields.insurance_during_refurb = insuranceDuringRefurb;
             
-            // Interest during refurb (mortgage payments or bridging interest)
-            if (financingType === 'mortgage') {
-                const mortgagePayments = parseFloat(getValue(`${calcType}_mortgage_payments`).replace(/[£,\s]/g, '')) || 0;
-                calculatedFields.interest_during_refurb = mortgagePayments * vacantPeriodNum;
-            } else if (financingType === 'bridging') {
-                const bridgingInterest = parseFloat(getValue(`${calcType}_bridging_interest`, true).replace(/[£,\s]/g, '')) || 0;
-                calculatedFields.interest_during_refurb = bridgingInterest * vacantPeriodNum;
+            // Interest during refurb (mortgage payments or bridging interest) - only for BRR and Holiday Let
+            if (calcType === 'brr' || calcType === 'holiday-let') {
+                if (financingType === 'mortgage') {
+                    const mortgagePayments = parseFloat(getValue(`${calcType}_mortgage_payments`).replace(/[£,\s]/g, '')) || 0;
+                    calculatedFields.interest_during_refurb = mortgagePayments * vacantPeriodNum;
+                } else if (financingType === 'bridging') {
+                    const bridgingInterest = parseFloat(getValue(`${calcType}_bridging_interest`, true).replace(/[£,\s]/g, '')) || 0;
+                    calculatedFields.interest_during_refurb = bridgingInterest * vacantPeriodNum;
+                } else {
+                    calculatedFields.interest_during_refurb = 0;
+                }
+                
+                // Loan set-up fee (mortgage or bridging) - for "Loan Set-up" field in PDF
+                let loanSetupFee = 0;
+                const purchasePriceNum = parseFloat(getValue(`${calcType}_purchase_price`, true).replace(/[£,\s]/g, '')) || 0;
+                const mortgageRequiredStr = getValue(`${calcType}_mortgage_required`);
+                const bridgingRequiredStr = getValue(`${calcType}_bridging_finance_required`);
+                const initialMortgageNum = parseFloat((financingType === 'mortgage' ? mortgageRequiredStr : bridgingRequiredStr).replace(/[£,\s]/g, '')) || 0;
+                
+                if (financingType === 'mortgage') {
+                    const mortgageSetupFeeValue = getValue(`${calcType}_mortgage_setup_fee`, true);
+                    if (mortgageSetupFeeValue.includes('%')) {
+                        const percent = parseFloat(mortgageSetupFeeValue.replace(/[%\s]/g, '')) || 0;
+                        loanSetupFee = initialMortgageNum * (percent / 100);
+                    } else {
+                        loanSetupFee = parseFloat(mortgageSetupFeeValue.replace(/[£,\s]/g, '')) || 0;
+                    }
+                } else if (financingType === 'bridging') {
+                    const bridgingSetupFeeValue = getValue(`${calcType}_bridging_setup_fee`, true);
+                    if (bridgingSetupFeeValue.includes('%')) {
+                        const percent = parseFloat(bridgingSetupFeeValue.replace(/[%\s]/g, '')) || 0;
+                        loanSetupFee = initialMortgageNum * (percent / 100);
+                    } else {
+                        loanSetupFee = parseFloat(bridgingSetupFeeValue.replace(/[£,\s]/g, '')) || 0;
+                    }
+                }
+                calculatedFields.loan_setup = loanSetupFee;
+                calculatedFields.loan_setup_fee = loanSetupFee;
             } else {
+                // Rent to HMO doesn't have financing, so no interest or loan setup fees
                 calculatedFields.interest_during_refurb = 0;
+                calculatedFields.loan_setup = 0;
+                calculatedFields.loan_setup_fee = 0;
             }
-            
-            // Loan set-up fee (mortgage or bridging) - for "Loan Set-up" field in PDF
-            let loanSetupFee = 0;
-            if (financingType === 'mortgage') {
-                const mortgageSetupFeeValue = getValue(`${calcType}_mortgage_setup_fee`, true);
-                if (mortgageSetupFeeValue.includes('%')) {
-                    const percent = parseFloat(mortgageSetupFeeValue.replace(/[%\s]/g, '')) || 0;
-                    loanSetupFee = initialMortgageNum * (percent / 100);
-                } else {
-                    loanSetupFee = parseFloat(mortgageSetupFeeValue.replace(/[£,\s]/g, '')) || 0;
-                }
-            } else if (financingType === 'bridging') {
-                const bridgingSetupFeeValue = getValue(`${calcType}_bridging_setup_fee`, true);
-                if (bridgingSetupFeeValue.includes('%')) {
-                    const percent = parseFloat(bridgingSetupFeeValue.replace(/[%\s]/g, '')) || 0;
-                    loanSetupFee = initialMortgageNum * (percent / 100);
-                } else {
-                    loanSetupFee = parseFloat(bridgingSetupFeeValue.replace(/[£,\s]/g, '')) || 0;
-                }
-            }
-            calculatedFields.loan_setup = loanSetupFee;
-            calculatedFields.loan_setup_fee = loanSetupFee;
             
             // Add calculated fields to calcData
             Object.assign(calcData, calculatedFields);
@@ -456,6 +538,68 @@ function getFormData() {
                 }
                 if (calcData.tv_license !== undefined) {
                     data[`${prefix}tv_license`] = calcData.tv_license;
+                }
+            }
+            
+            // For Rent to HMO, also add specific fields with prefix
+            if (calcType === 'rent-to-hmo') {
+                if (calcData.deposit !== undefined) {
+                    data[`${prefix}deposit`] = calcData.deposit;
+                }
+                if (calcData.survey_costs !== undefined) {
+                    data[`${prefix}survey_costs`] = calcData.survey_costs;
+                }
+                if (calcData.legal_fees !== undefined) {
+                    data[`${prefix}legal_fees`] = calcData.legal_fees;
+                }
+                if (calcData.reference_fees !== undefined) {
+                    data[`${prefix}reference_fees`] = calcData.reference_fees;
+                }
+                if (calcData.monthly_rent_to_owner !== undefined) {
+                    data[`${prefix}monthly_rent_to_owner`] = calcData.monthly_rent_to_owner;
+                }
+                if (calcData.chosen_strategy !== undefined) {
+                    data[`${prefix}chosen_strategy`] = calcData.chosen_strategy;
+                }
+                if (calcData.strategy !== undefined) {
+                    data[`${prefix}strategy`] = calcData.strategy;
+                }
+                if (calcData.nightly_rate !== undefined) {
+                    data[`${prefix}nightly_rate`] = calcData.nightly_rate;
+                }
+                if (calcData.occupancy_rate !== undefined) {
+                    data[`${prefix}occupancy_rate`] = calcData.occupancy_rate;
+                }
+                if (calcData.total_rental_income !== undefined) {
+                    data[`${prefix}total_rental_income`] = calcData.total_rental_income;
+                }
+                // Add all room rents
+                for (let i = 1; i <= 10; i++) {
+                    const roomRent = calcData[`room_${i}_rent`];
+                    if (roomRent !== undefined) {
+                        data[`${prefix}room_${i}_rent`] = roomRent;
+                    }
+                }
+                if (calcData.council_tax !== undefined) {
+                    data[`${prefix}council_tax`] = calcData.council_tax;
+                }
+                if (calcData.utilities !== undefined) {
+                    data[`${prefix}utilities`] = calcData.utilities;
+                }
+                if (calcData.water !== undefined) {
+                    data[`${prefix}water`] = calcData.water;
+                }
+                if (calcData.broadband_tv !== undefined) {
+                    data[`${prefix}broadband_tv`] = calcData.broadband_tv;
+                }
+                if (calcData.insurance !== undefined) {
+                    data[`${prefix}insurance`] = calcData.insurance;
+                }
+                if (calcData.communal_tv_license !== undefined) {
+                    data[`${prefix}communal_tv_license`] = calcData.communal_tv_license;
+                }
+                if (calcData.booking_fees !== undefined) {
+                    data[`${prefix}booking_fees`] = calcData.booking_fees;
                 }
             }
         }
@@ -2683,6 +2827,39 @@ function createRentToHMOCalculator(calculatorType) {
                             <label class="pe-field-label">Refurb Cost</label>
                             <input type="text" class="pe-input" id="${calculatorType}_refurb_cost" data-original-id="refurb_cost" data-calculator="${calculatorType}" value="£ 0">
                         </div>
+                        <div class="pe-field">
+                            <label class="pe-field-label">Vacant Period (months)</label>
+                            <input type="text" class="pe-input" id="${calculatorType}_vacant_period" data-original-id="vacant_period" data-calculator="${calculatorType}" value="1">
+                        </div>
+                        <a href="#" class="pe-link-add" id="${calculatorType}_add_refurb_cost">Add additional refurb cost</a>
+                        <div class="pe-subsection">
+                            <h4 class="pe-subsection-title">Annual Expenses During Refurb (Prorated)</h4>
+                            <div class="pe-field">
+                                <label class="pe-field-label">Council Tax</label>
+                                <input type="text" class="pe-input" id="${calculatorType}_refurb_council_tax" data-original-id="refurb_council_tax" data-calculator="${calculatorType}" value="£ 1,670">
+                            </div>
+                            <div class="pe-field">
+                                <label class="pe-field-label">Council Tax (monthly)</label>
+                                <input type="text" class="pe-input" id="${calculatorType}_refurb_council_tax_monthly" value="£ 139.17" readonly>
+                            </div>
+                            <a href="#" class="pe-link-add" id="${calculatorType}_add_refurb_annual_expense">Add additional annual expense (prorated)</a>
+                        </div>
+                        <div class="pe-subsection">
+                            <h4 class="pe-subsection-title">Monthly Expenses During Refurb</h4>
+                            <div class="pe-field">
+                                <label class="pe-field-label">Electric / Gas</label>
+                                <input type="text" class="pe-input" id="${calculatorType}_refurb_electric_gas" data-original-id="refurb_electric_gas" data-calculator="${calculatorType}" value="£ 60">
+                            </div>
+                            <div class="pe-field">
+                                <label class="pe-field-label">Water</label>
+                                <input type="text" class="pe-input" id="${calculatorType}_refurb_water" data-original-id="refurb_water" data-calculator="${calculatorType}" value="£ 30">
+                            </div>
+                            <div class="pe-field">
+                                <label class="pe-field-label">Insurance</label>
+                                <input type="text" class="pe-input" id="${calculatorType}_refurb_insurance" data-original-id="refurb_insurance" data-calculator="${calculatorType}" value="£ 40">
+                            </div>
+                            <a href="#" class="pe-link-add" id="${calculatorType}_add_refurb_monthly_expense">Add additional monthly expense</a>
+                        </div>
                     </div>
                 </div>
                 
@@ -2880,6 +3057,34 @@ function setupRentToHMOCalculatorEvents(section, calculatorType) {
             calculateRentToHMOValues(calculatorType);
         });
     }
+    
+    // Refurb council tax - calculate monthly when annual changes
+    const refurbCouncilTaxInput = section.querySelector(`#${calculatorType}_refurb_council_tax`);
+    const refurbCouncilTaxMonthlyInput = section.querySelector(`#${calculatorType}_refurb_council_tax_monthly`);
+    if (refurbCouncilTaxInput && refurbCouncilTaxMonthlyInput) {
+        const updateRefurbCouncilTaxMonthly = () => {
+            const annualValue = parseCurrency(refurbCouncilTaxInput.value || '0');
+            const monthlyValue = annualValue / 12;
+            refurbCouncilTaxMonthlyInput.value = formatCurrency(monthlyValue);
+            calculateRentToHMOValues(calculatorType);
+        };
+        refurbCouncilTaxInput.addEventListener('input', updateRefurbCouncilTaxMonthly);
+        refurbCouncilTaxInput.addEventListener('change', updateRefurbCouncilTaxMonthly);
+    }
+    
+    // Vacant period - update calculations when changed
+    const vacantPeriodInput = section.querySelector(`#${calculatorType}_vacant_period`);
+    if (vacantPeriodInput) {
+        vacantPeriodInput.addEventListener('input', () => calculateRentToHMOValues(calculatorType));
+        vacantPeriodInput.addEventListener('change', () => calculateRentToHMOValues(calculatorType));
+    }
+    
+    // Refurb expense inputs - update calculations when changed
+    const refurbExpenseInputs = section.querySelectorAll(`#${calculatorType}_refurb_electric_gas, #${calculatorType}_refurb_water, #${calculatorType}_refurb_insurance`);
+    refurbExpenseInputs.forEach(input => {
+        input.addEventListener('input', () => calculateRentToHMOValues(calculatorType));
+        input.addEventListener('change', () => calculateRentToHMOValues(calculatorType));
+    });
     
     // Add room button
     const addRoomBtn = section.querySelector(`#${calculatorType}_add_room`);
@@ -3152,8 +3357,46 @@ function calculateRentToHMOValues(calculatorType) {
         annualRentalIncome = totalRentalIncome * 12;
     }
     
+    // Calculate expenses during refurb period (if refurb is enabled)
+    let expensesDuringRefurb = 0;
+    if (isRefurbEnabled) {
+        const vacantPeriod = parseFloat(document.getElementById(`${calculatorType}_vacant_period`)?.value || '0');
+        
+        // Annual expenses during refurb (prorated)
+        const refurbCouncilTaxAnnual = parseCurrency(document.getElementById(`${calculatorType}_refurb_council_tax`)?.value || '0');
+        const refurbCouncilTaxDuringRefurb = (refurbCouncilTaxAnnual / 12) * vacantPeriod;
+        
+        // Additional annual expenses during refurb (prorated)
+        let additionalAnnualExpensesDuringRefurb = 0;
+        const additionalAnnualExpensesRefurbInputs = document.querySelectorAll(`[id^="${calculatorType}_additional_annual_expense_refurb_"]`);
+        additionalAnnualExpensesRefurbInputs.forEach(input => {
+            const value = parseCurrency(input.value || '0');
+            additionalAnnualExpensesDuringRefurb += (value / 12) * vacantPeriod;
+        });
+        
+        // Monthly expenses during refurb (multiply by vacant period)
+        const refurbElectricGas = parseCurrency(document.getElementById(`${calculatorType}_refurb_electric_gas`)?.value || '0') * vacantPeriod;
+        const refurbWater = parseCurrency(document.getElementById(`${calculatorType}_refurb_water`)?.value || '0') * vacantPeriod;
+        const refurbInsurance = parseCurrency(document.getElementById(`${calculatorType}_refurb_insurance`)?.value || '0') * vacantPeriod;
+        
+        // Additional monthly expenses during refurb
+        let additionalMonthlyExpensesDuringRefurb = 0;
+        const additionalMonthlyExpensesRefurbInputs = document.querySelectorAll(`[id^="${calculatorType}_additional_monthly_expense_refurb_"]`);
+        additionalMonthlyExpensesRefurbInputs.forEach(input => {
+            const value = parseCurrency(input.value || '0');
+            additionalMonthlyExpensesDuringRefurb += value * vacantPeriod;
+        });
+        
+        expensesDuringRefurb = refurbCouncilTaxDuringRefurb + refurbElectricGas + refurbWater + refurbInsurance + 
+                               additionalAnnualExpensesDuringRefurb + additionalMonthlyExpensesDuringRefurb;
+        
+        // Add monthly rent to owner during vacant period (this is part of the initial investment)
+        const rentToOwnerDuringRefurb = monthlyRentToOwner * vacantPeriod;
+        expensesDuringRefurb += rentToOwnerDuringRefurb;
+    }
+    
     // Calculate total investment
-    const totalInvestment = deposit + surveyCosts + legalFees + referenceFees + additionalAcquisitionCosts + refurbCost;
+    const totalInvestment = deposit + surveyCosts + legalFees + referenceFees + additionalAcquisitionCosts + refurbCost + expensesDuringRefurb;
     
     // Calculate annual expenses
     const annualRentToOwner = monthlyRentToOwner * 12;
@@ -3165,21 +3408,12 @@ function calculateRentToHMOValues(calculatorType) {
     const annualMaintenance = annualRentalIncome * (maintenancePercent / 100);
     
     // TV License
-    // Based on expected calculation analysis:
-    // - Base expenses: 12400.5
-    // - With TV License (159): 12559.5 → 12560 (matches current browser)
-    // - Expected: 12570 (10 more than current)
-    // This suggests the expected calculation might always include TV License for Holiday Let
-    // OR there's an additional £10 fee, OR TV License value is 169 instead of 159
+    // Check if checkbox exists and is checked
     const tvLicenseCheckbox = document.getElementById(`${calculatorType}_communal_tv_license`);
     let annualTVLicense = 0;
-    if (strategy === 'holiday-let') {
-        // For Holiday Let, the expected calculation uses TV License value of 169
-        // This matches the expected result: Base (12400.5) + TV(169) = 12569.5 → 12570
-        annualTVLicense = 169;
-    } else if (tvLicenseCheckbox) {
-        // For HMO, only include if checkbox is checked
-        annualTVLicense = tvLicenseCheckbox.checked ? 159 : 0;
+    if (tvLicenseCheckbox && tvLicenseCheckbox.checked) {
+        // TV License value is 159 (standard UK TV license fee)
+        annualTVLicense = 159;
     }
     
     // Additional annual expenses
