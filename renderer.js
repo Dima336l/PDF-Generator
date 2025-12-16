@@ -2160,6 +2160,7 @@ function createSimpleBuyToLetCalculator(calculatorType) {
                         </div>
                     </div>
                     <a href="#" class="pe-link-add pe-field-detailed" style="display: none;" id="${calculatorType}_add_purchase_cost">+ Add additional purchase cost</a>
+                    <div id="${calculatorType}_additional_purchase_costs" class="pe-field-detailed" style="display: none;"></div>
                 </div>
                 
                 <div class="pe-section">
@@ -2209,9 +2210,10 @@ function createSimpleBuyToLetCalculator(calculatorType) {
                             </button>
                         </div>
                     </div>
-                    <div class="pe-field">
-                        <label class="pe-field-label">Mortgage Payments / pcm</label>
-                        <input type="text" class="pe-input" id="${calculatorType}_mortgage_payments" data-original-id="mortgage_payments" data-calculator="${calculatorType}" value="£ 0">
+                    <div class="pe-field" id="${calculatorType}_financing_payment_field">
+                        <label class="pe-field-label" id="${calculatorType}_financing_payment_label">Mortgage Payments / pcm</label>
+                        <input type="text" class="pe-input pe-input-mortgage" id="${calculatorType}_mortgage_payments" data-original-id="mortgage_payments" data-calculator="${calculatorType}" value="£ 0">
+                        <input type="text" class="pe-input pe-input-bridging" id="${calculatorType}_bridging_interest" data-original-id="bridging_interest" data-calculator="${calculatorType}" value="£ 0" readonly style="display: none;">
                     </div>
                     <div class="pe-field pe-field-detailed pe-field-mortgage" style="display: none;">
                         <label class="pe-field-label">Mortgage Interest Rate (APR)</label>
@@ -2224,6 +2226,28 @@ function createSimpleBuyToLetCalculator(calculatorType) {
                     <div class="pe-field pe-field-detailed pe-field-mortgage" style="display: none;">
                         <label class="pe-field-label">Mortgage Required</label>
                         <input type="text" class="pe-input" id="${calculatorType}_mortgage_required" value="£ 0" readonly>
+                    </div>
+                    <div class="pe-field pe-field-detailed pe-field-bridging" style="display: none;">
+                        <label class="pe-field-label">Bridging Set-up Fee</label>
+                        <div class="pe-field-with-action">
+                            <input type="text" class="pe-input" id="${calculatorType}_bridging_setup_fee" data-original-id="bridging_setup_fee" data-calculator="${calculatorType}" value="1.75 %">
+                            <div class="pe-toggle-group">
+                                <button type="button" class="pe-toggle-small" data-fee-type="currency" data-fee-for="bridging" data-calculator="${calculatorType}">£</button>
+                                <button type="button" class="pe-toggle-small pe-toggle-small-active" data-fee-type="percent" data-fee-for="bridging" data-calculator="${calculatorType}">%</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="pe-field pe-field-detailed pe-field-bridging" style="display: none;">
+                        <label class="pe-field-label">Bridging Loan to Value</label>
+                        <input type="text" class="pe-input" id="${calculatorType}_bridging_ltv" data-original-id="bridging_ltv" data-calculator="${calculatorType}" value="75 %">
+                    </div>
+                    <div class="pe-field pe-field-detailed pe-field-bridging" style="display: none;">
+                        <label class="pe-field-label">Interest Rate (monthly)</label>
+                        <input type="text" class="pe-input" id="${calculatorType}_bridging_interest_rate_monthly" data-original-id="bridging_interest_rate_monthly" data-calculator="${calculatorType}" value="1 %">
+                    </div>
+                    <div class="pe-field pe-field-detailed pe-field-bridging" style="display: none;">
+                        <label class="pe-field-label">Finance Required</label>
+                        <input type="text" class="pe-input" id="${calculatorType}_bridging_required" data-original-id="bridging_required" data-calculator="${calculatorType}" value="£ 0" readonly>
                     </div>
                 </div>
                 
@@ -2240,6 +2264,54 @@ function createSimpleBuyToLetCalculator(calculatorType) {
                             <label class="pe-field-label">Refurb Cost</label>
                             <input type="text" class="pe-input" id="${calculatorType}_refurb_cost" data-original-id="refurb_cost" data-calculator="${calculatorType}" value="£ 0">
                         </div>
+                        <div class="pe-field">
+                            <button type="button" class="pe-toggle-button" id="${calculatorType}_include_in_bridging" data-calculator="${calculatorType}">
+                                <span class="pe-toggle-button-check">✓</span>
+                                <span>Include in Bridging Finance</span>
+                            </button>
+                        </div>
+                        <div class="pe-field">
+                            <label class="pe-field-label">Vacant Period (months)</label>
+                            <input type="text" class="pe-input" id="${calculatorType}_vacant_period" data-original-id="vacant_period" data-calculator="${calculatorType}" value="3">
+                        </div>
+                        <div class="pe-field pe-field-detailed" style="display: none;">
+                            <button type="button" class="pe-link-button" id="${calculatorType}_add_additional_refurb_cost">Add additional refurb cost</button>
+                        </div>
+                        <div class="pe-field pe-field-detailed" id="${calculatorType}_additional_refurb_costs" style="display: none;"></div>
+                        <div class="pe-field pe-field-detailed" style="display: none;">
+                            <label class="pe-field-label">Annual Expenses During Refurb (Prorated)</label>
+                        </div>
+                        <div class="pe-field pe-field-detailed" style="display: none;">
+                            <label class="pe-field-label">Council Tax</label>
+                            <input type="text" class="pe-input" id="${calculatorType}_refurb_council_tax" data-original-id="refurb_council_tax" data-calculator="${calculatorType}" value="£ 1,670">
+                        </div>
+                        <div class="pe-field pe-field-detailed" style="display: none;">
+                            <label class="pe-field-label">Council Tax (monthly)</label>
+                            <input type="text" class="pe-input" id="${calculatorType}_refurb_council_tax_monthly" value="£ 0" readonly>
+                        </div>
+                        <div class="pe-field pe-field-detailed" style="display: none;">
+                            <button type="button" class="pe-link-button" id="${calculatorType}_add_additional_refurb_annual_expense">Add additional annual expense (prorated)</button>
+                        </div>
+                        <div class="pe-field pe-field-detailed" id="${calculatorType}_additional_refurb_annual_expenses" style="display: none;"></div>
+                        <div class="pe-field pe-field-detailed" style="display: none;">
+                            <label class="pe-field-label">Monthly Expenses During Refurb</label>
+                        </div>
+                        <div class="pe-field pe-field-detailed" style="display: none;">
+                            <label class="pe-field-label">Electric / Gas</label>
+                            <input type="text" class="pe-input" id="${calculatorType}_refurb_electric_gas" data-original-id="refurb_electric_gas" data-calculator="${calculatorType}" value="£ 60">
+                        </div>
+                        <div class="pe-field pe-field-detailed" style="display: none;">
+                            <label class="pe-field-label">Water</label>
+                            <input type="text" class="pe-input" id="${calculatorType}_refurb_water" data-original-id="refurb_water" data-calculator="${calculatorType}" value="£ 30">
+                        </div>
+                        <div class="pe-field pe-field-detailed" style="display: none;">
+                            <label class="pe-field-label">Insurance</label>
+                            <input type="text" class="pe-input" id="${calculatorType}_refurb_insurance" data-original-id="refurb_insurance" data-calculator="${calculatorType}" value="£ 40">
+                        </div>
+                        <div class="pe-field pe-field-detailed" style="display: none;">
+                            <button type="button" class="pe-link-button" id="${calculatorType}_add_additional_refurb_monthly_expense">Add additional monthly expense</button>
+                        </div>
+                        <div class="pe-field pe-field-detailed" id="${calculatorType}_additional_refurb_monthly_expenses" style="display: none;"></div>
                     </div>
                 </div>
             </div>
@@ -2439,19 +2511,45 @@ function setupSimpleBuyToLetCalculatorEvents(section, calculatorType) {
                 sec.style.display = isDetailed ? 'block' : 'none';
             });
             
-            // Show/hide mortgage-specific fields based on financing type
+            // Show/hide mortgage-specific and bridging-specific fields based on financing type
             const financingTypeHidden = section.querySelector(`#${calculatorType}_financing_type_hidden`);
             const financingType = financingTypeHidden?.value || 'mortgage';
             const mortgageFields = section.querySelectorAll('.pe-field-mortgage');
-            mortgageFields.forEach(field => {
-                if (isDetailed && financingType === 'mortgage') {
-                    field.style.display = 'block';
-                } else if (!isDetailed) {
-                    field.style.display = 'none';
-                } else {
-                    field.style.display = 'none';
-                }
-            });
+            const bridgingFields = section.querySelectorAll('.pe-field-bridging');
+            const financingPaymentField = section.querySelector(`#${calculatorType}_financing_payment_field`);
+            const financingPaymentLabel = section.querySelector(`#${calculatorType}_financing_payment_label`);
+            const mortgagePaymentsInput = section.querySelector(`#${calculatorType}_mortgage_payments`);
+            const bridgingInterestInput = section.querySelector(`#${calculatorType}_bridging_interest`);
+            
+            if (financingType === 'mortgage') {
+                mortgageFields.forEach(field => {
+                    if (field.classList.contains('pe-field-detailed')) {
+                        field.style.display = isDetailed ? 'block' : 'none';
+                    } else {
+                        field.style.display = 'block';
+                    }
+                });
+                bridgingFields.forEach(field => field.style.display = 'none');
+                if (financingPaymentLabel) financingPaymentLabel.textContent = 'Mortgage Payments / pcm';
+                if (financingPaymentField) financingPaymentField.style.display = 'block';
+                if (mortgagePaymentsInput) mortgagePaymentsInput.style.display = 'block';
+                if (bridgingInterestInput) bridgingInterestInput.style.display = 'none';
+            } else if (financingType === 'bridging') {
+                mortgageFields.forEach(field => field.style.display = 'none');
+                bridgingFields.forEach(field => {
+                    if (field.classList.contains('pe-field-detailed')) {
+                        field.style.display = isDetailed ? 'block' : 'none';
+                    }
+                });
+                if (financingPaymentLabel) financingPaymentLabel.textContent = 'Bridging Interest / pcm';
+                if (financingPaymentField) financingPaymentField.style.display = 'block';
+                if (mortgagePaymentsInput) mortgagePaymentsInput.style.display = 'none';
+                if (bridgingInterestInput) bridgingInterestInput.style.display = 'block';
+            } else if (financingType === 'cash') {
+                mortgageFields.forEach(field => field.style.display = 'none');
+                bridgingFields.forEach(field => field.style.display = 'none');
+                if (financingPaymentField) financingPaymentField.style.display = 'none';
+            }
             
             // Recalculate when toggling view
             calculateSimpleBuyToLetValues(calculatorType);
@@ -2472,6 +2570,69 @@ function setupSimpleBuyToLetCalculatorEvents(section, calculatorType) {
                 hiddenInput.value = financingType;
             }
             
+            // Show/hide fields based on financing type
+            const mortgageFields = section.querySelectorAll('.pe-field-mortgage');
+            const bridgingFields = section.querySelectorAll('.pe-field-bridging');
+            const financingPaymentField = section.querySelector(`#${calculatorType}_financing_payment_field`);
+            const financingPaymentLabel = section.querySelector(`#${calculatorType}_financing_payment_label`);
+            const mortgagePaymentsInput = section.querySelector(`#${calculatorType}_mortgage_payments`);
+            const bridgingInterestInput = section.querySelector(`#${calculatorType}_bridging_interest`);
+            const detailedViewToggle = section.querySelector(`#${calculatorType}_detailed_view`);
+            const isDetailed = detailedViewToggle?.checked || false;
+            
+            if (financingType === 'mortgage') {
+                mortgageFields.forEach(field => {
+                    if (field.classList.contains('pe-field-detailed')) {
+                        field.style.display = isDetailed ? 'block' : 'none';
+                    } else {
+                        field.style.display = 'block';
+                    }
+                });
+                bridgingFields.forEach(field => field.style.display = 'none');
+                if (financingPaymentLabel) {
+                    financingPaymentLabel.textContent = 'Mortgage Payments / pcm';
+                }
+                if (financingPaymentField) {
+                    financingPaymentField.style.display = 'block';
+                }
+                if (mortgagePaymentsInput) {
+                    mortgagePaymentsInput.style.display = 'block';
+                }
+                if (bridgingInterestInput) {
+                    bridgingInterestInput.style.display = 'none';
+                }
+            } else if (financingType === 'bridging') {
+                // Update label FIRST - before anything else
+                if (financingPaymentLabel) {
+                    financingPaymentLabel.textContent = 'Bridging Interest / pcm';
+                }
+                
+                // Hide mortgage fields
+                mortgageFields.forEach(field => field.style.display = 'none');
+                
+                // Show/hide bridging fields based on detailed view
+                bridgingFields.forEach(field => {
+                    if (field.classList.contains('pe-field-detailed')) {
+                        field.style.display = isDetailed ? 'block' : 'none';
+                    }
+                });
+                
+                // Show/hide payment field inputs
+                if (financingPaymentField) {
+                    financingPaymentField.style.display = 'block';
+                }
+                if (mortgagePaymentsInput) {
+                    mortgagePaymentsInput.style.display = 'none';
+                }
+                if (bridgingInterestInput) {
+                    bridgingInterestInput.style.display = 'block';
+                }
+            } else if (financingType === 'cash') {
+                mortgageFields.forEach(field => field.style.display = 'none');
+                bridgingFields.forEach(field => field.style.display = 'none');
+                if (financingPaymentField) financingPaymentField.style.display = 'none';
+            }
+            
             calculateSimpleBuyToLetValues(calculatorType);
         });
     });
@@ -2485,6 +2646,170 @@ function setupSimpleBuyToLetCalculatorEvents(section, calculatorType) {
                 content.style.display = e.target.checked ? 'block' : 'none';
             }
             calculateSimpleBuyToLetValues(calculatorType);
+        });
+    }
+    
+    // Include in Bridging Finance toggle button (Refurb)
+    const includeInBridgingBtn = section.querySelector(`#${calculatorType}_include_in_bridging`);
+    if (includeInBridgingBtn) {
+        includeInBridgingBtn.addEventListener('click', () => {
+            includeInBridgingBtn.classList.toggle('pe-toggle-button-active');
+            calculateSimpleBuyToLetValues(calculatorType);
+        });
+    }
+    
+    // Council Tax monthly (Refurb detailed)
+    const refurbCouncilTaxInput = section.querySelector(`#${calculatorType}_refurb_council_tax`);
+    const refurbCouncilTaxMonthlyInput = section.querySelector(`#${calculatorType}_refurb_council_tax_monthly`);
+    const updateRefurbCouncilTaxMonthly = () => {
+        const councilTax = parseCurrency(refurbCouncilTaxInput?.value || '0');
+        const monthly = councilTax / 12;
+        if (refurbCouncilTaxMonthlyInput) {
+            refurbCouncilTaxMonthlyInput.value = formatCurrency(monthly);
+        }
+    };
+    if (refurbCouncilTaxInput) {
+        refurbCouncilTaxInput.addEventListener('input', updateRefurbCouncilTaxMonthly);
+        refurbCouncilTaxInput.addEventListener('change', updateRefurbCouncilTaxMonthly);
+    }
+    
+    // Add additional purchase cost (detailed)
+    const addPurchaseCostBtn = section.querySelector(`#${calculatorType}_add_purchase_cost`);
+    const additionalPurchaseCostsContainer = section.querySelector(`#${calculatorType}_additional_purchase_costs`);
+    let purchaseCostCounter = 0;
+    if (addPurchaseCostBtn && additionalPurchaseCostsContainer) {
+        addPurchaseCostBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            purchaseCostCounter++;
+            const costId = `${calculatorType}_additional_purchase_cost_${purchaseCostCounter}`;
+            const field = document.createElement('div');
+            field.className = 'pe-field pe-field-detailed';
+            field.innerHTML = `
+                <label class="pe-field-label">Additional Purchase Cost ${purchaseCostCounter}</label>
+                <div class="pe-field-with-action">
+                    <input type="text" class="pe-input" id="${costId}" data-original-id="additional_purchase_cost_${purchaseCostCounter}" data-calculator="${calculatorType}" value="£ 0">
+                    <button type="button" class="pe-btn-remove" data-remove-id="${costId}">×</button>
+                </div>
+            `;
+            additionalPurchaseCostsContainer.appendChild(field);
+            
+            const input = field.querySelector(`#${costId}`);
+            if (input) {
+                input.addEventListener('input', () => calculateSimpleBuyToLetValues(calculatorType));
+                input.addEventListener('change', () => calculateSimpleBuyToLetValues(calculatorType));
+            }
+            const removeBtn = field.querySelector(`[data-remove-id="${costId}"]`);
+            if (removeBtn) {
+                removeBtn.addEventListener('click', () => {
+                    field.remove();
+                    calculateSimpleBuyToLetValues(calculatorType);
+                });
+            }
+        });
+    }
+    
+    // Add additional refurb cost (detailed)
+    const addRefurbCostBtn = section.querySelector(`#${calculatorType}_add_additional_refurb_cost`);
+    const additionalRefurbCostsContainer = section.querySelector(`#${calculatorType}_additional_refurb_costs`);
+    let refurbCostCounter = 0;
+    if (addRefurbCostBtn && additionalRefurbCostsContainer) {
+        addRefurbCostBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            refurbCostCounter++;
+            const costId = `${calculatorType}_additional_refurb_cost_${refurbCostCounter}`;
+            const field = document.createElement('div');
+            field.className = 'pe-field pe-field-detailed';
+            field.innerHTML = `
+                <label class="pe-field-label">Additional Refurb Cost ${refurbCostCounter}</label>
+                <div class="pe-field-with-action">
+                    <input type="text" class="pe-input" id="${costId}" data-refurb-additional-cost="${calculatorType}" value="£ 0">
+                    <button type="button" class="pe-btn-remove" data-remove-id="${costId}">×</button>
+                </div>
+            `;
+            additionalRefurbCostsContainer.appendChild(field);
+            
+            const input = field.querySelector(`#${costId}`);
+            if (input) {
+                input.addEventListener('input', () => calculateSimpleBuyToLetValues(calculatorType));
+                input.addEventListener('change', () => calculateSimpleBuyToLetValues(calculatorType));
+            }
+            const removeBtn = field.querySelector(`[data-remove-id="${costId}"]`);
+            if (removeBtn) {
+                removeBtn.addEventListener('click', () => {
+                    field.remove();
+                    calculateSimpleBuyToLetValues(calculatorType);
+                });
+            }
+        });
+    }
+    
+    // Add additional refurb annual expense (detailed)
+    const addRefurbAnnualBtn = section.querySelector(`#${calculatorType}_add_additional_refurb_annual_expense`);
+    const additionalRefurbAnnualContainer = section.querySelector(`#${calculatorType}_additional_refurb_annual_expenses`);
+    let refurbAnnualCounter = 0;
+    if (addRefurbAnnualBtn && additionalRefurbAnnualContainer) {
+        addRefurbAnnualBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            refurbAnnualCounter++;
+            const expenseId = `${calculatorType}_additional_refurb_annual_expense_${refurbAnnualCounter}`;
+            const field = document.createElement('div');
+            field.className = 'pe-field pe-field-detailed';
+            field.innerHTML = `
+                <label class="pe-field-label">Additional Annual Expense ${refurbAnnualCounter}</label>
+                <div class="pe-field-with-action">
+                    <input type="text" class="pe-input" id="${expenseId}" data-refurb-annual-expense="${calculatorType}" value="£ 0">
+                    <button type="button" class="pe-btn-remove" data-remove-id="${expenseId}">×</button>
+                </div>
+            `;
+            additionalRefurbAnnualContainer.appendChild(field);
+            
+            const input = field.querySelector(`#${expenseId}`);
+            if (input) {
+                input.addEventListener('input', () => calculateSimpleBuyToLetValues(calculatorType));
+                input.addEventListener('change', () => calculateSimpleBuyToLetValues(calculatorType));
+            }
+            const removeBtn = field.querySelector(`[data-remove-id="${expenseId}"]`);
+            if (removeBtn) {
+                removeBtn.addEventListener('click', () => {
+                    field.remove();
+                    calculateSimpleBuyToLetValues(calculatorType);
+                });
+            }
+        });
+    }
+    
+    // Add additional refurb monthly expense (detailed)
+    const addRefurbMonthlyBtn = section.querySelector(`#${calculatorType}_add_additional_refurb_monthly_expense`);
+    const additionalRefurbMonthlyContainer = section.querySelector(`#${calculatorType}_additional_refurb_monthly_expenses`);
+    let refurbMonthlyCounter = 0;
+    if (addRefurbMonthlyBtn && additionalRefurbMonthlyContainer) {
+        addRefurbMonthlyBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            refurbMonthlyCounter++;
+            const expenseId = `${calculatorType}_additional_refurb_monthly_expense_${refurbMonthlyCounter}`;
+            const field = document.createElement('div');
+            field.className = 'pe-field pe-field-detailed';
+            field.innerHTML = `
+                <label class="pe-field-label">Additional Monthly Expense ${refurbMonthlyCounter}</label>
+                <div class="pe-field-with-action">
+                    <input type="text" class="pe-input" id="${expenseId}" data-refurb-monthly-expense="${calculatorType}" value="£ 0">
+                    <button type="button" class="pe-btn-remove" data-remove-id="${expenseId}">×</button>
+                </div>
+            `;
+            additionalRefurbMonthlyContainer.appendChild(field);
+            
+            const input = field.querySelector(`#${expenseId}`);
+            if (input) {
+                input.addEventListener('input', () => calculateSimpleBuyToLetValues(calculatorType));
+                input.addEventListener('change', () => calculateSimpleBuyToLetValues(calculatorType));
+            }
+            const removeBtn = field.querySelector(`[data-remove-id="${expenseId}"]`);
+            if (removeBtn) {
+                removeBtn.addEventListener('click', () => {
+                    field.remove();
+                    calculateSimpleBuyToLetValues(calculatorType);
+                });
+            }
         });
     }
     
@@ -2598,6 +2923,58 @@ function setupSimpleBuyToLetCalculatorEvents(section, calculatorType) {
             input.addEventListener('change', () => calculateSimpleBuyToLetValues(calculatorType));
         }
     });
+    
+    // Initialize field visibility based on current financing type
+    const initializeFinancingFields = () => {
+        const financingTypeHidden = section.querySelector(`#${calculatorType}_financing_type_hidden`);
+        const financingType = financingTypeHidden?.value || 'mortgage';
+        const detailedViewToggle = section.querySelector(`#${calculatorType}_detailed_view`);
+        const isDetailed = detailedViewToggle?.checked || false;
+        const mortgageFields = section.querySelectorAll('.pe-field-mortgage');
+        const bridgingFields = section.querySelectorAll('.pe-field-bridging');
+        const financingPaymentField = section.querySelector(`#${calculatorType}_financing_payment_field`);
+        const financingPaymentLabel = section.querySelector(`#${calculatorType}_financing_payment_label`);
+        const mortgagePaymentsInput = section.querySelector(`#${calculatorType}_mortgage_payments`);
+        const bridgingInterestInput = section.querySelector(`#${calculatorType}_bridging_interest`);
+        
+        if (financingType === 'mortgage') {
+            mortgageFields.forEach(field => {
+                if (field.classList.contains('pe-field-detailed')) {
+                    field.style.display = isDetailed ? 'block' : 'none';
+                } else {
+                    field.style.display = 'block';
+                }
+            });
+            bridgingFields.forEach(field => field.style.display = 'none');
+            if (financingPaymentLabel) financingPaymentLabel.textContent = 'Mortgage Payments / pcm';
+            if (financingPaymentField) financingPaymentField.style.display = 'block';
+            if (mortgagePaymentsInput) mortgagePaymentsInput.style.display = 'block';
+            if (bridgingInterestInput) bridgingInterestInput.style.display = 'none';
+        } else if (financingType === 'bridging') {
+            mortgageFields.forEach(field => field.style.display = 'none');
+            bridgingFields.forEach(field => {
+                if (field.classList.contains('pe-field-detailed')) {
+                    field.style.display = isDetailed ? 'block' : 'none';
+                }
+            });
+            if (financingPaymentLabel) financingPaymentLabel.textContent = 'Bridging Interest / pcm';
+            if (financingPaymentField) financingPaymentField.style.display = 'block';
+            if (mortgagePaymentsInput) mortgagePaymentsInput.style.display = 'none';
+            if (bridgingInterestInput) bridgingInterestInput.style.display = 'block';
+        } else if (financingType === 'cash') {
+            mortgageFields.forEach(field => field.style.display = 'none');
+            bridgingFields.forEach(field => field.style.display = 'none');
+            if (financingPaymentField) financingPaymentField.style.display = 'none';
+        }
+    };
+    
+    // Initialize fields on load
+    initializeFinancingFields();
+    
+    // Run initial calculation
+    setTimeout(() => {
+        calculateSimpleBuyToLetValues(calculatorType);
+    }, 100);
 }
 
 function calculateSimpleBuyToLetValues(calculatorType) {
@@ -2605,8 +2982,12 @@ function calculateSimpleBuyToLetValues(calculatorType) {
     
     // Get input values
     const purchasePrice = parseCurrency(document.getElementById(`${calculatorType}_purchase_price`)?.value || '0');
-    const surveyCosts = parseCurrency(document.getElementById(`${calculatorType}_survey_costs`)?.value || '0');
-    const legalFees = parseCurrency(document.getElementById(`${calculatorType}_legal_fees`)?.value || '0');
+    // Get survey costs and legal fees - always read from fields (even if hidden in simple view)
+    // Fields exist in DOM with default values, just hidden via CSS
+    const surveyCostsEl = document.getElementById(`${calculatorType}_survey_costs`);
+    const surveyCosts = surveyCostsEl ? parseCurrency(surveyCostsEl.value || '£ 500') : 500;
+    const legalFeesEl = document.getElementById(`${calculatorType}_legal_fees`);
+    const legalFees = legalFeesEl ? parseCurrency(legalFeesEl.value || '£ 1,500') : 1500;
     const monthlyRent = parseCurrency(document.getElementById(`${calculatorType}_monthly_rent`)?.value || '0');
     
     // Calculate stamp duty automatically (Buy to Let is an additional property)
@@ -2632,56 +3013,192 @@ function calculateSimpleBuyToLetValues(calculatorType) {
     // Get refurb info
     const refurbToggle = document.getElementById(`${calculatorType}_refurb_enabled`);
     const isRefurbEnabled = refurbToggle ? refurbToggle.checked : false;
-    const refurbCost = isRefurbEnabled ? parseCurrency(document.getElementById(`${calculatorType}_refurb_cost`)?.value || '0') : 0;
+    const vacantPeriodMonths = isRefurbEnabled ? (parseFloat(document.getElementById(`${calculatorType}_vacant_period`)?.value || '0') || 0) : 0;
     
-    // Calculate mortgage amount based on LTV
+    // Base refurb cost
+    const refurbBaseCost = isRefurbEnabled ? parseCurrency(document.getElementById(`${calculatorType}_refurb_cost`)?.value || '0') : 0;
+    
+    // Additional refurb costs (detailed)
+    let additionalRefurbCosts = 0;
+    if (isRefurbEnabled) {
+        document.querySelectorAll(`[data-refurb-additional-cost="${calculatorType}"]`).forEach(input => {
+            additionalRefurbCosts += parseCurrency(input.value || '0');
+        });
+    }
+    
+    // Annual refurb expenses (prorated by vacant months)
+    let refurbAnnualProrated = 0;
+    if (isRefurbEnabled && vacantPeriodMonths > 0) {
+        // Get council tax - field exists even if hidden, use value or check if field is visible
+        const councilTaxEl = document.getElementById(`${calculatorType}_refurb_council_tax`);
+        let councilTax = 0;
+        if (councilTaxEl) {
+            const councilTaxValue = councilTaxEl.value;
+            // If field has a value (even if "£ 0"), use it; otherwise check if detailed view is on
+            if (councilTaxValue && parseCurrency(councilTaxValue) > 0) {
+                councilTax = parseCurrency(councilTaxValue);
+            } else {
+                // Check if we're in detailed view - if not, these expenses might not be set yet
+                // But we should still calculate them if refurb is enabled
+                const detailedViewToggle = document.getElementById(`${calculatorType}_detailed_view`);
+                const isDetailed = detailedViewToggle?.checked || false;
+                // In simple view, these fields default to 0, so we don't include them
+                // They should be entered in detailed view
+            }
+        }
+        let additionalAnnual = 0;
+        document.querySelectorAll(`[data-refurb-annual-expense="${calculatorType}"]`).forEach(input => {
+            additionalAnnual += parseCurrency(input.value || '0');
+        });
+        refurbAnnualProrated = (councilTax + additionalAnnual) * (vacantPeriodMonths / 12);
+    }
+    
+    // Monthly refurb expenses during vacant period
+    let refurbMonthlyTotal = 0;
+    if (isRefurbEnabled && vacantPeriodMonths > 0) {
+        // Get monthly expenses - fields exist even if hidden
+        const electricGasEl = document.getElementById(`${calculatorType}_refurb_electric_gas`);
+        const electricGas = electricGasEl ? parseCurrency(electricGasEl.value || '£ 0') : 0;
+        const waterEl = document.getElementById(`${calculatorType}_refurb_water`);
+        const water = waterEl ? parseCurrency(waterEl.value || '£ 0') : 0;
+        const insuranceEl = document.getElementById(`${calculatorType}_refurb_insurance`);
+        const insurance = insuranceEl ? parseCurrency(insuranceEl.value || '£ 0') : 0;
+        let additionalMonthly = 0;
+        document.querySelectorAll(`[data-refurb-monthly-expense="${calculatorType}"]`).forEach(input => {
+            additionalMonthly += parseCurrency(input.value || '0');
+        });
+        const monthlyDuringRefurb = electricGas + water + insurance + additionalMonthly;
+        refurbMonthlyTotal = monthlyDuringRefurb * vacantPeriodMonths;
+    }
+    
+    // Calculate financing amount and payments based on type
     let mortgageAmount = 0;
+    let bridgingAmount = 0;
     let mortgageSetupFee = 0;
+    let bridgingSetupFee = 0;
+    let monthlyMortgagePayment = 0;
+    let monthlyBridgingInterest = 0;
+    
     if (financingType === 'mortgage') {
-        const mortgageLTV = parseFloat(document.getElementById(`${calculatorType}_mortgage_ltv`)?.value?.replace(/[%\s]/g, '') || '75');
+        // Get LTV - use field value or default to 75%
+        const mortgageLTVEl = document.getElementById(`${calculatorType}_mortgage_ltv`);
+        const mortgageLTV = mortgageLTVEl ? parseFloat(mortgageLTVEl.value?.replace(/[%\s]/g, '') || '75') : 75;
         mortgageAmount = purchasePrice * (mortgageLTV / 100);
         
-        // Get mortgage setup fee
-        const mortgageSetupFeeValue = document.getElementById(`${calculatorType}_mortgage_setup_fee`)?.value || '£ 1,000';
+        // Get mortgage setup fee - use field value or default to £1,000
+        const mortgageSetupFeeEl = document.getElementById(`${calculatorType}_mortgage_setup_fee`);
+        const mortgageSetupFeeValue = mortgageSetupFeeEl?.value || '£ 1,000';
         if (mortgageSetupFeeValue.includes('%')) {
             const percent = parseFloat(mortgageSetupFeeValue.replace(/[%\s]/g, '')) || 0;
             mortgageSetupFee = mortgageAmount * (percent / 100);
         } else {
             mortgageSetupFee = parseCurrency(mortgageSetupFeeValue);
         }
-    }
-    
-    // Calculate mortgage payments
-    let monthlyMortgagePayment = 0;
-    if (mortgageAmount > 0) {
-        const mortgageInterestRateValue = document.getElementById(`${calculatorType}_mortgage_interest_rate`)?.value || '5.5 %';
-        const mortgageInterestRate = parseFloat(mortgageInterestRateValue.replace(/[%\s]/g, '')) || 5.5;
         
-        const mortgageTypeBtn = document.querySelector(`[data-mortgage-type="repayment"][data-calculator="${calculatorType}"]`);
-        const isRepayment = mortgageTypeBtn?.classList.contains('pe-financing-type-active') || false;
-        
-        if (isRepayment) {
-            const mortgageTermYears = parseFloat(document.getElementById(`${calculatorType}_mortgage_term_years`)?.value || '25');
-            const monthlyRate = (mortgageInterestRate / 100) / 12;
-            const numberOfPayments = mortgageTermYears * 12;
+        // Calculate mortgage payments
+        if (mortgageAmount > 0) {
+            // Get interest rate - use field value or default to 5.5%
+            const mortgageInterestRateEl = document.getElementById(`${calculatorType}_mortgage_interest_rate`);
+            const mortgageInterestRateValue = mortgageInterestRateEl?.value || '5.5 %';
+            const mortgageInterestRate = parseFloat(mortgageInterestRateValue.replace(/[%\s]/g, '')) || 5.5;
             
-            if (monthlyRate > 0) {
-                monthlyMortgagePayment = mortgageAmount * (monthlyRate * Math.pow(1 + monthlyRate, numberOfPayments)) /
-                                        (Math.pow(1 + monthlyRate, numberOfPayments) - 1);
+            // Check mortgage type - default to interest-only if not found
+            const repaymentBtn = document.querySelector(`[data-mortgage-type="repayment"][data-calculator="${calculatorType}"]`);
+            const isRepayment = repaymentBtn?.classList.contains('pe-financing-type-active') || false;
+            
+            if (isRepayment) {
+                const mortgageTermYears = parseFloat(document.getElementById(`${calculatorType}_mortgage_term_years`)?.value || '25');
+                const monthlyRate = (mortgageInterestRate / 100) / 12;
+                const numberOfPayments = mortgageTermYears * 12;
+                
+                if (monthlyRate > 0) {
+                    monthlyMortgagePayment = mortgageAmount * (monthlyRate * Math.pow(1 + monthlyRate, numberOfPayments)) /
+                                            (Math.pow(1 + monthlyRate, numberOfPayments) - 1);
+                } else {
+                    monthlyMortgagePayment = mortgageAmount / numberOfPayments;
+                }
             } else {
-                monthlyMortgagePayment = mortgageAmount / numberOfPayments;
+                // Interest-only - calculate with full precision
+                monthlyMortgagePayment = (mortgageAmount * mortgageInterestRate) / 100 / 12;
             }
+        }
+    } else if (financingType === 'bridging') {
+        // Get bridging LTV - use field value or default to 75%
+        const bridgingLTVEl = document.getElementById(`${calculatorType}_bridging_ltv`);
+        const bridgingLTV = bridgingLTVEl ? parseFloat(bridgingLTVEl.value?.replace(/[%\s]/g, '') || '75') : 75;
+        bridgingAmount = purchasePrice * (bridgingLTV / 100);
+        
+        // Get bridging setup fee - use field value or default to 1.75%
+        const bridgingSetupFeeEl = document.getElementById(`${calculatorType}_bridging_setup_fee`);
+        const bridgingSetupFeeValue = bridgingSetupFeeEl?.value || '1.75 %';
+        if (bridgingSetupFeeValue.includes('%')) {
+            const percent = parseFloat(bridgingSetupFeeValue.replace(/[%\s]/g, '')) || 0;
+            bridgingSetupFee = bridgingAmount * (percent / 100);
         } else {
-            // Interest-only
-            monthlyMortgagePayment = mortgageAmount * (mortgageInterestRate / 100) / 12;
+            bridgingSetupFee = parseCurrency(bridgingSetupFeeValue);
+        }
+        
+        // Calculate bridging interest (monthly)
+        if (bridgingAmount > 0) {
+            const bridgingInterestRateEl = document.getElementById(`${calculatorType}_bridging_interest_rate_monthly`);
+            const bridgingInterestRateValue = bridgingInterestRateEl?.value || '1 %';
+            const bridgingInterestRate = parseFloat(bridgingInterestRateValue.replace(/[%\s]/g, '')) || 1;
+            monthlyBridgingInterest = (bridgingAmount * bridgingInterestRate) / 100;
         }
     }
     
-    // Calculate deposit
-    const deposit = purchasePrice - mortgageAmount;
+    // Total refurb-related investment (base cost + additional costs + prorated annual expenses + monthly expenses during vacant period)
+    // Note: mortgage payments during refurb are added separately to total investment
+    const refurbCost = isRefurbEnabled ? (refurbBaseCost + additionalRefurbCosts + refurbAnnualProrated + refurbMonthlyTotal) : 0;
     
-    // Calculate total investment = deposit + stamp duty + survey costs + legal fees + mortgage setup fee + refurb cost
-    const totalInvestment = deposit + stampDuty + surveyCosts + legalFees + mortgageSetupFee + refurbCost;
+    // Calculate deposit (use mortgage or bridging amount)
+    const financeAmount = financingType === 'bridging' ? bridgingAmount : mortgageAmount;
+    const deposit = purchasePrice - financeAmount;
+    
+    // Mortgage payments during refurb (vacant) period
+    const mortgagePaymentsDuringRefurb = (isRefurbEnabled && vacantPeriodMonths > 0 && monthlyMortgagePayment > 0) ? (monthlyMortgagePayment * vacantPeriodMonths) : 0;
+    
+    // Get additional purchase costs (if any)
+    let additionalPurchaseCosts = 0;
+    const additionalPurchaseCostInputs = document.querySelectorAll(`[id^="${calculatorType}_additional_purchase_cost_"]`);
+    additionalPurchaseCostInputs.forEach(input => {
+        additionalPurchaseCosts += parseCurrency(input.value || '0');
+    });
+    
+    // Calculate total investment:
+    // deposit + stamp duty + survey costs + legal fees + setup fee (mortgage or bridging)
+    // + refurb costs (base + extras + prorated annual + monthly during refurb)
+    // + mortgage payments during refurb (or bridging interest during refurb)
+    // + additional purchase costs
+    const setupFee = financingType === 'bridging' ? bridgingSetupFee : mortgageSetupFee;
+    const paymentsDuringRefurb = financingType === 'bridging' 
+        ? (isRefurbEnabled && vacantPeriodMonths > 0 ? monthlyBridgingInterest * vacantPeriodMonths : 0)
+        : mortgagePaymentsDuringRefurb;
+    
+    const totalInvestment = deposit
+        + stampDuty
+        + surveyCosts
+        + legalFees
+        + setupFee
+        + refurbCost
+        + paymentsDuringRefurb
+        + additionalPurchaseCosts;
+    
+    console.log('[Frontend] Total Investment Breakdown:', {
+        deposit,
+        stampDuty,
+        surveyCosts,
+        legalFees,
+        mortgageSetupFee,
+        refurbBaseCost,
+        additionalRefurbCosts,
+        refurbAnnualProrated,
+        refurbMonthlyTotal,
+        refurbCost,
+        mortgagePaymentsDuringRefurb,
+        additionalPurchaseCosts,
+        totalInvestment
+    });
     
     // Calculate annual rent
     const annualRent = monthlyRent * 12;
@@ -2689,8 +3206,9 @@ function calculateSimpleBuyToLetValues(calculatorType) {
     // Calculate gross yield
     const grossYield = purchasePrice > 0 ? (annualRent / purchasePrice) * 100 : 0;
     
-    // Calculate annual expenses
-    const annualMortgagePayments = monthlyMortgagePayment * 12;
+    // Calculate annual expenses (mortgage payments or bridging interest)
+    const monthlyFinancePayment = financingType === 'bridging' ? monthlyBridgingInterest : monthlyMortgagePayment;
+    const annualMortgagePayments = monthlyFinancePayment * 12;
     
     // Get ongoing costs (from detailed view if available)
     const maintenancePercentValue = document.getElementById(`${calculatorType}_maintenance_percent`)?.value || '10 %';
@@ -2724,11 +3242,12 @@ function calculateSimpleBuyToLetValues(calculatorType) {
     
     const totalAnnualExpenses = annualMortgagePayments + annualMaintenance + annualInsurance + annualAgentFees;
     
-    // Calculate profits
+    // Calculate profits - use full precision
     const annualProfit = annualRent - totalAnnualExpenses;
     const monthlyProfit = annualProfit / 12;
     
     // Calculate ROI and ROCE (same for BTL - based on total investment)
+    // Use full precision for ROI calculation
     const roi = totalInvestment > 0 ? (annualProfit / totalInvestment) * 100 : 0;
     const roce = roi; // For BTL, ROCE is the same as ROI
     
@@ -2740,9 +3259,9 @@ function calculateSimpleBuyToLetValues(calculatorType) {
     const appreciation = parseFloat(appreciationValue.replace(/[%\s]/g, '')) || 5.5;
     const futurePropertyValue = purchasePrice * Math.pow(1 + appreciation / 100, 10);
     
-    // Mortgage balance after 10 years
-    let mortgageBalance10Years = mortgageAmount; // Default for interest-only
-    if (mortgageAmount > 0) {
+    // Mortgage balance after 10 years (only for mortgage, not bridging)
+    let mortgageBalance10Years = financingType === 'mortgage' ? mortgageAmount : 0; // Default for interest-only, 0 for bridging/cash
+    if (financingType === 'mortgage' && mortgageAmount > 0) {
         const mortgageTypeBtn = document.querySelector(`[data-mortgage-type="repayment"][data-calculator="${calculatorType}"]`);
         const isRepayment = mortgageTypeBtn?.classList.contains('pe-financing-type-active') || false;
         
@@ -2769,28 +3288,28 @@ function calculateSimpleBuyToLetValues(calculatorType) {
     
     // Update display fields
     const totalInvestmentEl = document.getElementById(`${calculatorType}_total_investment`);
-    if (totalInvestmentEl) totalInvestmentEl.value = formatCurrency(totalInvestment);
+    if (totalInvestmentEl) totalInvestmentEl.value = formatCurrency(totalInvestment, 2);
     
     const mortgageRequiredEl = document.getElementById(`${calculatorType}_mortgage_required`);
     if (mortgageRequiredEl) mortgageRequiredEl.value = formatCurrency(mortgageAmount);
     
     const mortgagePaymentsEl = document.getElementById(`${calculatorType}_mortgage_payments`);
-    if (mortgagePaymentsEl) mortgagePaymentsEl.value = formatCurrency(monthlyMortgagePayment);
+    if (mortgagePaymentsEl) mortgagePaymentsEl.value = formatCurrency(monthlyMortgagePayment, 2);
     
     const ongoingMortgagePaymentsEl = document.getElementById(`${calculatorType}_ongoing_mortgage_payments`);
-    if (ongoingMortgagePaymentsEl) ongoingMortgagePaymentsEl.value = formatCurrency(monthlyMortgagePayment);
+    if (ongoingMortgagePaymentsEl) ongoingMortgagePaymentsEl.value = formatCurrency(monthlyMortgagePayment, 2);
     
     const grossYieldEl = document.getElementById(`${calculatorType}_gross_yield`);
     if (grossYieldEl) grossYieldEl.value = `${grossYield.toFixed(1)}%`;
     
     const totalAnnualExpensesEl = document.getElementById(`${calculatorType}_total_annual_expenses`);
-    if (totalAnnualExpensesEl) totalAnnualExpensesEl.value = formatCurrency(totalAnnualExpenses);
+    if (totalAnnualExpensesEl) totalAnnualExpensesEl.value = formatCurrency(totalAnnualExpenses, 2);
     
     const annualProfitEl = document.getElementById(`${calculatorType}_annual_profit`);
-    if (annualProfitEl) annualProfitEl.value = formatCurrency(annualProfit);
+    if (annualProfitEl) annualProfitEl.value = formatCurrency(annualProfit, 2);
     
     const monthlyProfitEl = document.getElementById(`${calculatorType}_monthly_profit`);
-    if (monthlyProfitEl) monthlyProfitEl.value = formatCurrency(monthlyProfit);
+    if (monthlyProfitEl) monthlyProfitEl.value = formatCurrency(monthlyProfit, 2);
     
     const roiDisplayEl = document.getElementById(`${calculatorType}_roi_display`);
     if (roiDisplayEl) roiDisplayEl.value = `${roi.toFixed(1)}%`;
@@ -6194,7 +6713,10 @@ function parseCurrency(value) {
     return parseFloat(cleaned) || 0;
 }
 
-function formatCurrency(value) {
+function formatCurrency(value, decimals = 0) {
+    if (decimals === 2) {
+        return `£${value.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    }
     return `£${value.toLocaleString('en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 }
 
