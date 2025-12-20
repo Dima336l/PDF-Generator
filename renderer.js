@@ -3178,7 +3178,7 @@ function initializeBuyToLetChart(calculatorType) {
 }
 
 // Update chart with calculated values
-function updateBuyToLetChart(calculatorType, purchasePrice, mortgageAmount, appreciation) {
+function updateBuyToLetChart(calculatorType, purchasePrice, mortgageAmount, appreciation, financingType = 'mortgage') {
     const chartInstance = window[`${calculatorType}_chartInstance`];
     if (!chartInstance) {
         // Try to initialize if chart doesn't exist
@@ -3205,15 +3205,24 @@ function updateBuyToLetChart(calculatorType, purchasePrice, mortgageAmount, appr
     const mortgageBalances = [];
     const equities = [];
     
-    // For interest-only mortgage, balance stays constant
-    // For repayment, we need to calculate the balance each year
-    const mortgageTypeBtn = document.querySelector(`[data-mortgage-type="repayment"][data-calculator="${calculatorType}"]`);
-    const isRepayment = mortgageTypeBtn?.classList.contains('pe-financing-type-active') || false;
+    // For bridging finance, balance stays constant (interest-only)
+    // For mortgage: interest-only stays constant, repayment decreases
+    let isRepayment = false;
+    let mortgageInterestRate = 5.5;
+    let mortgageTermYears = 25;
+    
+    if (financingType === 'mortgage') {
+        const mortgageTypeBtn = document.querySelector(`[data-mortgage-type="repayment"][data-calculator="${calculatorType}"]`);
+        isRepayment = mortgageTypeBtn?.classList.contains('pe-financing-type-active') || false;
+        const mortgageInterestRateValue = document.getElementById(`${calculatorType}_mortgage_interest_rate`)?.value || '5.5 %';
+        mortgageInterestRate = parseFloat(mortgageInterestRateValue.replace(/[%\s]/g, '')) || 5.5;
+        mortgageTermYears = parseFloat(document.getElementById(`${calculatorType}_mortgage_term_years`)?.value || '25');
+    } else if (financingType === 'bridging') {
+        // Bridging is always interest-only, balance stays constant
+        isRepayment = false;
+    }
     
     let currentMortgageBalance = mortgageAmount;
-    const mortgageInterestRateValue = document.getElementById(`${calculatorType}_mortgage_interest_rate`)?.value || '5.5 %';
-    const mortgageInterestRate = parseFloat(mortgageInterestRateValue.replace(/[%\s]/g, '')) || 5.5;
-    const mortgageTermYears = parseFloat(document.getElementById(`${calculatorType}_mortgage_term_years`)?.value || '25');
     
     for (let year = 1; year <= 30; year++) {
         years.push(2024 + year);
@@ -3223,7 +3232,10 @@ function updateBuyToLetChart(calculatorType, purchasePrice, mortgageAmount, appr
         propertyValues.push(propertyValue);
         
         // Calculate mortgage balance
-        if (isRepayment && mortgageAmount > 0) {
+        // For bridging, balance stays constant (interest-only)
+        if (financingType === 'bridging') {
+            currentMortgageBalance = mortgageAmount; // Bridging balance stays constant
+        } else if (isRepayment && mortgageAmount > 0) {
             const monthlyRate = mortgageInterestRate / 100 / 12;
             const totalMonths = mortgageTermYears * 12;
             const monthsPaid = year * 12;
@@ -3257,7 +3269,10 @@ function updateBuyToLetChart(calculatorType, purchasePrice, mortgageAmount, appr
         const propertyValue = purchasePrice * Math.pow(1 + appreciation / 100, year);
         let mortgageBalance = mortgageAmount;
         
-        if (isRepayment && mortgageAmount > 0) {
+        // For bridging, balance stays constant
+        if (financingType === 'bridging') {
+            mortgageBalance = mortgageAmount; // Bridging balance stays constant
+        } else if (isRepayment && mortgageAmount > 0) {
             const monthlyRate = mortgageInterestRate / 100 / 12;
             const totalMonths = mortgageTermYears * 12;
             const monthsPaid = year * 12;
@@ -3435,6 +3450,17 @@ function calculateSimpleBuyToLetValues(calculatorType) {
         const bridgingLTV = bridgingLTVEl ? parseFloat(bridgingLTVEl.value?.replace(/[%\s]/g, '') || '75') : 75;
         bridgingAmount = purchasePrice * (bridgingLTV / 100);
         
+        // Check if refurb is included in bridging finance
+        const includeInBridgingBtn = document.getElementById(`${calculatorType}_include_in_bridging`);
+        const isRefurbIncludedInBridging = includeInBridgingBtn?.classList.contains('pe-toggle-button-active') || false;
+        
+        // If refurb is included in bridging, add refurb costs to bridging amount
+        // Note: refurbBaseCost and additionalRefurbCosts are calculated earlier in the function
+        if (isRefurbIncludedInBridging && isRefurbEnabled) {
+            const refurbCostForBridging = refurbBaseCost + additionalRefurbCosts;
+            bridgingAmount += refurbCostForBridging;
+        }
+        
         // Get bridging setup fee - use field value or default to 1.75%
         const bridgingSetupFeeEl = document.getElementById(`${calculatorType}_bridging_setup_fee`);
         const bridgingSetupFeeValue = bridgingSetupFeeEl?.value || '1.75 %';
@@ -3456,7 +3482,20 @@ function calculateSimpleBuyToLetValues(calculatorType) {
     
     // Total refurb-related investment (base cost + additional costs + prorated annual expenses + monthly expenses during vacant period)
     // Note: mortgage payments during refurb are added separately to total investment
-    const refurbCost = isRefurbEnabled ? (refurbBaseCost + additionalRefurbCosts + refurbAnnualProrated + refurbMonthlyTotal) : 0;
+    // If refurb is included in bridging, the base refurb cost is already in bridgingAmount, so don't add it to total investment separately
+    const includeInBridgingBtn = document.getElementById(`${calculatorType}_include_in_bridging`);
+    const isRefurbIncludedInBridging = includeInBridgingBtn?.classList.contains('pe-toggle-button-active') || false;
+    
+    let refurbCost = 0;
+    if (isRefurbEnabled) {
+        if (isRefurbIncludedInBridging && financingType === 'bridging') {
+            // If included in bridging, only add prorated annual and monthly expenses (not base cost, as it's in bridgingAmount)
+            refurbCost = refurbAnnualProrated + refurbMonthlyTotal;
+        } else {
+            // Otherwise, add all refurb costs
+            refurbCost = refurbBaseCost + additionalRefurbCosts + refurbAnnualProrated + refurbMonthlyTotal;
+        }
+    }
     
     // Calculate deposit (use mortgage or bridging amount)
     const financeAmount = financingType === 'bridging' ? bridgingAmount : mortgageAmount;
@@ -3513,9 +3552,15 @@ function calculateSimpleBuyToLetValues(calculatorType) {
     // Calculate gross yield
     const grossYield = purchasePrice > 0 ? (annualRent / purchasePrice) * 100 : 0;
     
-    // Calculate annual expenses (mortgage payments or bridging interest)
-    const monthlyFinancePayment = financingType === 'bridging' ? monthlyBridgingInterest : monthlyMortgagePayment;
-    const annualMortgagePayments = monthlyFinancePayment * 12;
+    // Calculate annual expenses
+    // For ongoing costs, we should use refinance mortgage payments if available (from Exit Strategy)
+    // Otherwise, use initial mortgage payments (not bridging interest for ongoing costs)
+    let monthlyFinancePaymentForOngoing = monthlyMortgagePayment;
+    
+    // Check if we have refinance mortgage payments (from Exit Strategy)
+    // This will be calculated later in Exit Strategy section, so we'll recalculate expenses there
+    // For now, use initial mortgage payment (bridging is temporary, refinance is for ongoing)
+    const annualMortgagePayments = monthlyFinancePaymentForOngoing * 12;
     
     // Get ongoing costs (from detailed view if available)
     const maintenancePercentValue = document.getElementById(`${calculatorType}_maintenance_percent`)?.value || '10 %';
@@ -3597,14 +3642,52 @@ function calculateSimpleBuyToLetValues(calculatorType) {
     const totalInvestmentEl = document.getElementById(`${calculatorType}_total_investment`);
     if (totalInvestmentEl) totalInvestmentEl.value = formatCurrency(totalInvestment, 2);
     
+    // Update Mortgage Required / Finance Required field based on financing type
     const mortgageRequiredEl = document.getElementById(`${calculatorType}_mortgage_required`);
-    if (mortgageRequiredEl) mortgageRequiredEl.value = formatCurrency(mortgageAmount);
+    if (mortgageRequiredEl) {
+        if (financingType === 'mortgage') {
+            mortgageRequiredEl.value = formatCurrency(mortgageAmount);
+        } else {
+            mortgageRequiredEl.value = '£ 0';
+        }
+    }
     
+    const bridgingRequiredEl = document.getElementById(`${calculatorType}_bridging_required`);
+    if (bridgingRequiredEl) {
+        if (financingType === 'bridging') {
+            bridgingRequiredEl.value = formatCurrency(bridgingAmount);
+        } else {
+            bridgingRequiredEl.value = '£ 0';
+        }
+    }
+    
+    // Update payment fields based on financing type
     const mortgagePaymentsEl = document.getElementById(`${calculatorType}_mortgage_payments`);
-    if (mortgagePaymentsEl) mortgagePaymentsEl.value = formatCurrency(monthlyMortgagePayment, 2);
+    if (mortgagePaymentsEl) {
+        if (financingType === 'mortgage') {
+            mortgagePaymentsEl.value = formatCurrency(monthlyMortgagePayment, 2);
+        } else {
+            mortgagePaymentsEl.value = '£ 0';
+        }
+    }
     
+    const bridgingInterestEl = document.getElementById(`${calculatorType}_bridging_interest`);
+    if (bridgingInterestEl) {
+        if (financingType === 'bridging') {
+            bridgingInterestEl.value = formatCurrency(monthlyBridgingInterest, 2);
+        } else {
+            bridgingInterestEl.value = '£ 0';
+        }
+    }
+    
+    // Update ongoing mortgage payments (for ongoing costs section)
+    // This should use refinance mortgage payments if available, otherwise initial payments
     const ongoingMortgagePaymentsEl = document.getElementById(`${calculatorType}_ongoing_mortgage_payments`);
-    if (ongoingMortgagePaymentsEl) ongoingMortgagePaymentsEl.value = formatCurrency(monthlyMortgagePayment, 2);
+    if (ongoingMortgagePaymentsEl) {
+        // Use the refinance mortgage payments for ongoing costs (calculated in Exit Strategy)
+        // This will be updated after Exit Strategy calculations
+        ongoingMortgagePaymentsEl.value = formatCurrency(monthlyFinancePaymentForOngoing, 2);
+    }
     
     const grossYieldEl = document.getElementById(`${calculatorType}_gross_yield`);
     if (grossYieldEl) grossYieldEl.value = `${grossYield.toFixed(1)}%`;
@@ -3639,7 +3722,9 @@ function calculateSimpleBuyToLetValues(calculatorType) {
     
     // Update chart
     const chartFinanceAmount = financingType === 'mortgage' ? mortgageAmount : (financingType === 'bridging' ? bridgingAmount : 0);
-    updateBuyToLetChart(calculatorType, purchasePrice, chartFinanceAmount, appreciation);
+    if (purchasePrice > 0) {
+        updateBuyToLetChart(calculatorType, purchasePrice, chartFinanceAmount, appreciation, financingType);
+    }
     
     // Exit Strategy calculations
     const exitEstimatedMarketValueEl = document.getElementById(`${calculatorType}_exit_estimated_market_value`);
@@ -3656,11 +3741,22 @@ function calculateSimpleBuyToLetValues(calculatorType) {
         const lockedInEquity = exitEstimatedMarketValue - refinanceAmount;
         
         // Calculate money back (refinance amount - initial finance amount)
-        const financeAmount = financingType === 'mortgage' ? mortgageAmount : (financingType === 'bridging' ? bridgingAmount : 0);
-        const moneyBack = refinanceAmount - financeAmount;
+        // Note: For bridging, if refurb is included, the bridging amount includes refurb,
+        // but for refinance calculation, we use the base bridging amount (purchase price * LTV)
+        const financeAmountForRefinance = financingType === 'mortgage' ? mortgageAmount : (financingType === 'bridging' ? (purchasePrice * (parseFloat(document.getElementById(`${calculatorType}_bridging_ltv`)?.value?.replace(/[%\s]/g, '') || '75') / 100)) : 0);
+        const moneyBack = refinanceAmount - financeAmountForRefinance;
         
         // Calculate money left in (total investment - money back)
         const moneyLeftIn = totalInvestment - moneyBack;
+        
+        // Debug logging
+        console.log('[Exit Strategy] Money Left In Calculation:', {
+            totalInvestment,
+            refinanceAmount,
+            financeAmountForRefinance,
+            moneyBack,
+            moneyLeftIn
+        });
         
         // Calculate ideal purchase price (max) - the price where moneyLeftIn would be 0
         // Uses iterative approach to find break-even purchase price
@@ -3802,6 +3898,72 @@ function calculateSimpleBuyToLetValues(calculatorType) {
         
         const exitMortgagePaymentsEl = document.getElementById(`${calculatorType}_exit_mortgage_payments`);
         if (exitMortgagePaymentsEl) exitMortgagePaymentsEl.value = formatCurrency(exitMortgagePayments, 2);
+        
+        // Recalculate annual expenses using refinance mortgage payments (for ongoing costs)
+        // This is the correct approach: bridging is temporary, refinance is for ongoing costs
+        const annualMortgagePaymentsRefi = exitMortgagePayments * 12;
+        const maintenancePercentValue = document.getElementById(`${calculatorType}_maintenance_percent`)?.value || '10 %';
+        const maintenancePercent = parseFloat(maintenancePercentValue.replace(/[%\s]/g, '')) || 10;
+        const annualMaintenanceRefi = annualRent * (maintenancePercent / 100);
+        const ongoingInsuranceValue = document.getElementById(`${calculatorType}_ongoing_insurance`)?.value || '£ 40';
+        const monthlyInsuranceRefi = parseCurrency(ongoingInsuranceValue);
+        const annualInsuranceRefi = monthlyInsuranceRefi * 12;
+        
+        // Agent fees
+        let annualAgentFeesRefi = 0;
+        const agentFeesValue = document.getElementById(`${calculatorType}_agent_fees`)?.value || '10 %';
+        const agentFeesInput = document.getElementById(`${calculatorType}_agent_fees`);
+        let agentFeeType = 'percent';
+        if (agentFeesInput) {
+            agentFeeType = agentFeesInput.dataset.feeType || 'percent';
+            const activeToggle = document.querySelector(`[data-fee-for="agent"][data-calculator="${calculatorType}"].pe-toggle-small-active`);
+            if (activeToggle) {
+                agentFeeType = activeToggle.dataset.feeType || 'percent';
+            }
+        }
+        if (agentFeeType === 'percent') {
+            const agentFeePercent = parseFloat(agentFeesValue.replace(/[%\s]/g, '')) || 10;
+            annualAgentFeesRefi = annualRent * (agentFeePercent / 100);
+        } else {
+            const monthlyAgentFees = parseCurrency(agentFeesValue);
+            annualAgentFeesRefi = monthlyAgentFees * 12;
+        }
+        
+        const totalAnnualExpensesRefi = annualMortgagePaymentsRefi + annualMaintenanceRefi + annualInsuranceRefi + annualAgentFeesRefi;
+        const annualProfitRefi = annualRent - totalAnnualExpensesRefi;
+        const monthlyProfitRefi = annualProfitRefi / 12;
+        const roiRefi = moneyLeftIn > 0 ? (annualProfitRefi / moneyLeftIn) * 100 : 0;
+        
+        // Update display fields with refinance-based calculations
+        const totalAnnualExpensesEl = document.getElementById(`${calculatorType}_total_annual_expenses`);
+        if (totalAnnualExpensesEl) totalAnnualExpensesEl.value = formatCurrency(totalAnnualExpensesRefi, 2);
+        
+        const annualProfitEl = document.getElementById(`${calculatorType}_annual_profit`);
+        if (annualProfitEl) annualProfitEl.value = formatCurrency(annualProfitRefi, 2);
+        
+        const monthlyProfitEl = document.getElementById(`${calculatorType}_monthly_profit`);
+        if (monthlyProfitEl) monthlyProfitEl.value = formatCurrency(monthlyProfitRefi, 2);
+        
+        const roiTopEl = document.getElementById(`${calculatorType}_roi`);
+        if (roiTopEl) roiTopEl.textContent = `${roiRefi.toFixed(1)}%`;
+        
+        const roiDisplayEl = document.getElementById(`${calculatorType}_roi_display`);
+        if (roiDisplayEl) roiDisplayEl.value = `${roiRefi.toFixed(1)}%`;
+        
+        // Update ROCE (same as ROI for BTL)
+        const roceEl = document.getElementById(`${calculatorType}_roce`);
+        if (roceEl) roceEl.textContent = `${roiRefi.toFixed(1)}%`;
+        
+        // Update net yield
+        const netYield = exitEstimatedMarketValue > 0 ? (annualProfitRefi / exitEstimatedMarketValue) * 100 : 0;
+        const netYieldEl = document.getElementById(`${calculatorType}_net_yield`);
+        if (netYieldEl) netYieldEl.textContent = `${netYield.toFixed(2)}%`;
+        
+        // Update ongoing mortgage payments field with refinance payments
+        const ongoingMortgagePaymentsEl = document.getElementById(`${calculatorType}_ongoing_mortgage_payments`);
+        if (ongoingMortgagePaymentsEl) {
+            ongoingMortgagePaymentsEl.value = formatCurrency(exitMortgagePayments, 2);
+        }
     } else {
         // Reset fields if no estimated market value
         const exitLockedInEquityEl = document.getElementById(`${calculatorType}_exit_locked_in_equity`);
