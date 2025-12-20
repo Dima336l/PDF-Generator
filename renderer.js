@@ -2478,6 +2478,55 @@ function createSimpleBuyToLetCalculator(calculatorType) {
                     <input type="text" class="pe-input pe-input-small" id="${calculatorType}_appreciation" value="5.5%" data-calculator="${calculatorType}">
                 </div>
             </div>
+            
+            <div class="pe-chart-container">
+                <canvas id="${calculatorType}_chart"></canvas>
+            </div>
+            
+            <div class="pe-metrics-table">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Metrics</th>
+                            <th>Year 1</th>
+                            <th>Year 2</th>
+                            <th>Year 5</th>
+                            <th>Year 10</th>
+                            <th>Year 20</th>
+                            <th>Year 30</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Mortgage Balance</td>
+                            <td id="${calculatorType}_mortgage_balance_1">£0</td>
+                            <td id="${calculatorType}_mortgage_balance_2">£0</td>
+                            <td id="${calculatorType}_mortgage_balance_5">£0</td>
+                            <td id="${calculatorType}_mortgage_balance_10">£0</td>
+                            <td id="${calculatorType}_mortgage_balance_20">£0</td>
+                            <td id="${calculatorType}_mortgage_balance_30">£0</td>
+                        </tr>
+                        <tr>
+                            <td>Property Value</td>
+                            <td id="${calculatorType}_property_value_1">£0</td>
+                            <td id="${calculatorType}_property_value_2">£0</td>
+                            <td id="${calculatorType}_property_value_5">£0</td>
+                            <td id="${calculatorType}_property_value_10">£0</td>
+                            <td id="${calculatorType}_property_value_20">£0</td>
+                            <td id="${calculatorType}_property_value_30">£0</td>
+                        </tr>
+                        <tr>
+                            <td>Equity</td>
+                            <td id="${calculatorType}_equity_1">£0</td>
+                            <td id="${calculatorType}_equity_2">£0</td>
+                            <td id="${calculatorType}_equity_5">£0</td>
+                            <td id="${calculatorType}_equity_10">£0</td>
+                            <td id="${calculatorType}_equity_20">£0</td>
+                            <td id="${calculatorType}_equity_30">£0</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
     `;
     
@@ -3017,10 +3066,222 @@ function setupSimpleBuyToLetCalculatorEvents(section, calculatorType) {
     // Initialize fields on load
     initializeFinancingFields();
     
+    // Initialize chart (with delay to ensure Chart.js is loaded)
+    setTimeout(() => {
+        initializeBuyToLetChart(calculatorType);
+    }, 200);
+    
     // Run initial calculation
     setTimeout(() => {
         calculateSimpleBuyToLetValues(calculatorType);
-    }, 100);
+    }, 300);
+}
+
+// Initialize chart for Buy to Let calculator
+function initializeBuyToLetChart(calculatorType) {
+    const canvas = document.getElementById(`${calculatorType}_chart`);
+    if (!canvas) {
+        console.log(`[Chart] Canvas not found for ${calculatorType}`);
+        return;
+    }
+    
+    // Check if Chart.js is loaded
+    if (typeof Chart === 'undefined') {
+        console.log('[Chart] Chart.js not loaded, retrying in 100ms...');
+        setTimeout(() => initializeBuyToLetChart(calculatorType), 100);
+        return;
+    }
+    
+    const ctx = canvas.getContext('2d');
+    
+    // Destroy existing chart if it exists
+    if (window[`${calculatorType}_chartInstance`]) {
+        window[`${calculatorType}_chartInstance`].destroy();
+    }
+    
+    // Create chart
+    try {
+        window[`${calculatorType}_chartInstance`] = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [
+                {
+                    label: 'Mortgage Balance',
+                    data: [],
+                    borderColor: 'rgb(234, 179, 8)',
+                    backgroundColor: 'rgba(234, 179, 8, 0.6)',
+                    fill: true,
+                    tension: 0.4,
+                    order: 3
+                },
+                {
+                    label: 'Equity',
+                    data: [],
+                    borderColor: 'rgb(59, 130, 246)',
+                    backgroundColor: 'rgba(59, 130, 246, 0.6)',
+                    fill: true,
+                    tension: 0.4,
+                    order: 2
+                },
+                {
+                    label: 'Property Value',
+                    data: [],
+                    borderColor: 'rgb(20, 184, 166)',
+                    backgroundColor: 'rgba(20, 184, 166, 0.3)',
+                    fill: false,
+                    tension: 0.4,
+                    order: 1,
+                    pointRadius: 0
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top'
+                },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false,
+                    callbacks: {
+                        label: function(context) {
+                            return context.dataset.label + ': £' + context.parsed.y.toLocaleString();
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            return '£' + value.toLocaleString();
+                        }
+                    }
+                },
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Year'
+                    }
+                }
+            }
+        }
+    });
+    } catch (error) {
+        console.error('[Chart] Error initializing chart:', error);
+    }
+}
+
+// Update chart with calculated values
+function updateBuyToLetChart(calculatorType, purchasePrice, mortgageAmount, appreciation) {
+    const chartInstance = window[`${calculatorType}_chartInstance`];
+    if (!chartInstance) {
+        // Try to initialize if chart doesn't exist
+        console.log(`[Chart] Chart instance not found for ${calculatorType}, initializing...`);
+        initializeBuyToLetChart(calculatorType);
+        // Try again after initialization
+        setTimeout(() => {
+            const newInstance = window[`${calculatorType}_chartInstance`];
+            if (newInstance && purchasePrice > 0) {
+                updateBuyToLetChart(calculatorType, purchasePrice, mortgageAmount, appreciation);
+            }
+        }, 100);
+        return;
+    }
+    
+    if (purchasePrice <= 0) {
+        console.log('[Chart] Purchase price is 0, skipping chart update');
+        return;
+    }
+    
+    // Calculate values for 30 years
+    const years = [];
+    const propertyValues = [];
+    const mortgageBalances = [];
+    const equities = [];
+    
+    // For interest-only mortgage, balance stays constant
+    // For repayment, we need to calculate the balance each year
+    const mortgageTypeBtn = document.querySelector(`[data-mortgage-type="repayment"][data-calculator="${calculatorType}"]`);
+    const isRepayment = mortgageTypeBtn?.classList.contains('pe-financing-type-active') || false;
+    
+    let currentMortgageBalance = mortgageAmount;
+    const mortgageInterestRateValue = document.getElementById(`${calculatorType}_mortgage_interest_rate`)?.value || '5.5 %';
+    const mortgageInterestRate = parseFloat(mortgageInterestRateValue.replace(/[%\s]/g, '')) || 5.5;
+    const mortgageTermYears = parseFloat(document.getElementById(`${calculatorType}_mortgage_term_years`)?.value || '25');
+    
+    for (let year = 1; year <= 30; year++) {
+        years.push(2024 + year);
+        
+        // Calculate property value with appreciation
+        const propertyValue = purchasePrice * Math.pow(1 + appreciation / 100, year);
+        propertyValues.push(propertyValue);
+        
+        // Calculate mortgage balance
+        if (isRepayment && mortgageAmount > 0) {
+            const monthlyRate = mortgageInterestRate / 100 / 12;
+            const totalMonths = mortgageTermYears * 12;
+            const monthsPaid = year * 12;
+            
+            if (totalMonths > monthsPaid && monthlyRate > 0) {
+                const balanceFactor = (Math.pow(1 + monthlyRate, totalMonths) - Math.pow(1 + monthlyRate, monthsPaid)) / 
+                                     (Math.pow(1 + monthlyRate, totalMonths) - 1);
+                currentMortgageBalance = mortgageAmount * balanceFactor;
+            } else if (totalMonths <= monthsPaid) {
+                currentMortgageBalance = 0;
+            }
+        } else {
+            // Interest-only: balance stays constant
+            currentMortgageBalance = mortgageAmount;
+        }
+        
+        mortgageBalances.push(currentMortgageBalance);
+        equities.push(propertyValue - currentMortgageBalance);
+    }
+    
+    // Update chart data
+    chartInstance.data.labels = years;
+    chartInstance.data.datasets[0].data = propertyValues;
+    chartInstance.data.datasets[1].data = mortgageBalances;
+    chartInstance.data.datasets[2].data = equities;
+    chartInstance.update();
+    
+    // Update metrics table
+    const metricYears = [1, 2, 5, 10, 20, 30];
+    metricYears.forEach(year => {
+        const propertyValue = purchasePrice * Math.pow(1 + appreciation / 100, year);
+        let mortgageBalance = mortgageAmount;
+        
+        if (isRepayment && mortgageAmount > 0) {
+            const monthlyRate = mortgageInterestRate / 100 / 12;
+            const totalMonths = mortgageTermYears * 12;
+            const monthsPaid = year * 12;
+            
+            if (totalMonths > monthsPaid && monthlyRate > 0) {
+                const balanceFactor = (Math.pow(1 + monthlyRate, totalMonths) - Math.pow(1 + monthlyRate, monthsPaid)) / 
+                                     (Math.pow(1 + monthlyRate, totalMonths) - 1);
+                mortgageBalance = mortgageAmount * balanceFactor;
+            } else if (totalMonths <= monthsPaid) {
+                mortgageBalance = 0;
+            }
+        }
+        
+        const equity = propertyValue - mortgageBalance;
+        
+        const mortgageBalanceEl = document.getElementById(`${calculatorType}_mortgage_balance_${year}`);
+        if (mortgageBalanceEl) mortgageBalanceEl.textContent = formatCurrency(mortgageBalance);
+        
+        const propertyValueEl = document.getElementById(`${calculatorType}_property_value_${year}`);
+        if (propertyValueEl) propertyValueEl.textContent = formatCurrency(propertyValue);
+        
+        const equityEl = document.getElementById(`${calculatorType}_equity_${year}`);
+        if (equityEl) equityEl.textContent = formatCurrency(equity);
+    });
 }
 
 function calculateSimpleBuyToLetValues(calculatorType) {
@@ -3375,6 +3636,186 @@ function calculateSimpleBuyToLetValues(calculatorType) {
     
     const equity10YearsEl = document.getElementById(`${calculatorType}_equity_10_years`);
     if (equity10YearsEl) equity10YearsEl.textContent = formatCurrency(equity10Years);
+    
+    // Update chart
+    const chartFinanceAmount = financingType === 'mortgage' ? mortgageAmount : (financingType === 'bridging' ? bridgingAmount : 0);
+    updateBuyToLetChart(calculatorType, purchasePrice, chartFinanceAmount, appreciation);
+    
+    // Exit Strategy calculations
+    const exitEstimatedMarketValueEl = document.getElementById(`${calculatorType}_exit_estimated_market_value`);
+    const exitEstimatedMarketValue = exitEstimatedMarketValueEl ? parseCurrency(exitEstimatedMarketValueEl.value || '0') : 0;
+    
+    if (exitEstimatedMarketValue > 0) {
+        // Get refinance LTV (from Exit Strategy section, or use default 75%)
+        const refinanceLTVEl = document.getElementById(`${calculatorType}_refinance_ltv`);
+        const refinanceLTVValue = refinanceLTVEl?.value || '75 %';
+        const refinanceLTV = parseFloat(refinanceLTVValue.replace(/[%\s]/g, '')) || 75;
+        const refinanceAmount = exitEstimatedMarketValue * (refinanceLTV / 100);
+        
+        // Calculate locked in equity
+        const lockedInEquity = exitEstimatedMarketValue - refinanceAmount;
+        
+        // Calculate money back (refinance amount - initial finance amount)
+        const financeAmount = financingType === 'mortgage' ? mortgageAmount : (financingType === 'bridging' ? bridgingAmount : 0);
+        const moneyBack = refinanceAmount - financeAmount;
+        
+        // Calculate money left in (total investment - money back)
+        const moneyLeftIn = totalInvestment - moneyBack;
+        
+        // Calculate ideal purchase price (max) - the price where moneyLeftIn would be 0
+        // Uses iterative approach to find break-even purchase price
+        let idealPurchasePrice = 0;
+        if (refinanceLTV < 100 && refinanceAmount > 0) {
+            // Get initial mortgage LTV
+            const initialMortgageLTVEl = document.getElementById(`${calculatorType}_mortgage_ltv`);
+            const initialMortgageLTV = initialMortgageLTVEl ? parseFloat(initialMortgageLTVEl.value?.replace(/[%\s]/g, '') || '75') : 75;
+            
+            // Get fixed costs that don't depend on purchase price
+            const surveyCosts = document.getElementById(`${calculatorType}_survey_costs`) ? parseCurrency(document.getElementById(`${calculatorType}_survey_costs`).value || '£ 500') : 500;
+            const legalFees = document.getElementById(`${calculatorType}_legal_fees`) ? parseCurrency(document.getElementById(`${calculatorType}_legal_fees`).value || '£ 1,500') : 1500;
+            
+            // Start with a reasonable estimate
+            let testPrice = exitEstimatedMarketValue - moneyLeftIn;
+            if (testPrice < purchasePrice * 0.1) testPrice = purchasePrice * 0.5;
+            if (testPrice > exitEstimatedMarketValue) testPrice = exitEstimatedMarketValue * 0.8;
+            
+            let iterations = 0;
+            const maxIterations = 50;
+            let bestPrice = testPrice;
+            let bestMoneyLeftIn = Infinity;
+            
+            while (iterations < maxIterations) {
+                // Calculate stamp duty for test price (Buy to Let is always additional property)
+                const testStampDutyBreakdown = [];
+                const testStampDuty = calculateStampDuty(testPrice, 'current', false, false, false, testStampDutyBreakdown, true);
+                
+                // Calculate initial finance amount for test price
+                const testInitialFinance = testPrice * (initialMortgageLTV / 100);
+                
+                // Calculate setup fee for test price
+                let testSetupFee = 0;
+                if (financingType === 'mortgage') {
+                    const mortgageSetupFeeValue = document.getElementById(`${calculatorType}_mortgage_setup_fee`)?.value || '£ 1,000';
+                    if (mortgageSetupFeeValue.includes('%')) {
+                        const percent = parseFloat(mortgageSetupFeeValue.replace(/[%\s]/g, '')) || 0;
+                        testSetupFee = testInitialFinance * (percent / 100);
+                    } else {
+                        testSetupFee = parseCurrency(mortgageSetupFeeValue);
+                    }
+                } else if (financingType === 'bridging') {
+                    const bridgingSetupFeeValue = document.getElementById(`${calculatorType}_bridging_setup_fee`)?.value || '1.75 %';
+                    if (bridgingSetupFeeValue.includes('%')) {
+                        const percent = parseFloat(bridgingSetupFeeValue.replace(/[%\s]/g, '')) || 0;
+                        testSetupFee = testInitialFinance * (percent / 100);
+                    } else {
+                        testSetupFee = parseCurrency(bridgingSetupFeeValue);
+                    }
+                }
+                
+                // Calculate test total investment (simplified - includes main costs)
+                const testDeposit = testPrice - testInitialFinance;
+                const testTotalInvestment = testDeposit + testStampDuty + refurbBaseCost + additionalRefurbCosts + 
+                                          surveyCosts + legalFees + testSetupFee;
+                
+                // Add expenses during refurb if applicable
+                if (isRefurbEnabled && vacantPeriodMonths > 0) {
+                    // Simplified: use same monthly payment calculation for test price
+                    if (financingType === 'mortgage' && testInitialFinance > 0) {
+                        const mortgageInterestRateValue = document.getElementById(`${calculatorType}_mortgage_interest_rate`)?.value || '5.5 %';
+                        const mortgageInterestRate = parseFloat(mortgageInterestRateValue.replace(/[%\s]/g, '')) || 5.5;
+                        const monthlyRate = (mortgageInterestRate / 100) / 12;
+                        const testMonthlyPayment = testInitialFinance * monthlyRate; // Interest only for simplicity
+                        testTotalInvestment += testMonthlyPayment * vacantPeriodMonths;
+                    }
+                    testTotalInvestment += refurbAnnualProrated + refurbMonthlyTotal;
+                }
+                
+                // Calculate test refinance amount (using same LTV as current)
+                const testRefinanceAmount = exitEstimatedMarketValue * (refinanceLTV / 100);
+                
+                // Calculate test money back and money left in
+                const testMoneyBack = testRefinanceAmount - testInitialFinance;
+                const testMoneyLeftIn = testTotalInvestment - testMoneyBack;
+                
+                // Track best result (closest to 0)
+                if (Math.abs(testMoneyLeftIn) < Math.abs(bestMoneyLeftIn)) {
+                    bestMoneyLeftIn = testMoneyLeftIn;
+                    bestPrice = testPrice;
+                }
+                
+                // Adjust test price based on money left in
+                if (Math.abs(testMoneyLeftIn) < 1) {
+                    // Close enough to break-even
+                    break;
+                } else if (testMoneyLeftIn > 0) {
+                    // Need to reduce purchase price
+                    testPrice = testPrice - (testMoneyLeftIn * 0.5);
+                } else {
+                    // Can increase purchase price
+                    testPrice = testPrice - (testMoneyLeftIn * 0.5);
+                }
+                
+                iterations++;
+            }
+            
+            idealPurchasePrice = bestPrice;
+        }
+        
+        // Calculate refinance mortgage payments
+        let exitMortgagePayments = 0;
+        if (refinanceAmount > 0) {
+            // Get refinance interest rate
+            const refinanceInterestRateEl = document.getElementById(`${calculatorType}_refinance_interest_rate`);
+            const refinanceInterestRateValue = refinanceInterestRateEl?.value || '5.5 %';
+            const refinanceInterestRate = parseFloat(refinanceInterestRateValue.replace(/[%\s]/g, '')) || 5.5;
+            
+            // Check refinance mortgage type
+            const refinanceRepaymentBtn = document.querySelector(`[data-refinance-mortgage-type="repayment"][data-calculator="${calculatorType}"]`);
+            const isRefinanceRepayment = refinanceRepaymentBtn?.classList.contains('pe-financing-type-active') || false;
+            
+            if (isRefinanceRepayment) {
+                // Repayment mortgage
+                const refinanceTermYears = parseFloat(document.getElementById(`${calculatorType}_refinance_mortgage_term_years`)?.value || '25');
+                const monthlyRate = (refinanceInterestRate / 100) / 12;
+                const numberOfPayments = refinanceTermYears * 12;
+                
+                if (monthlyRate > 0 && numberOfPayments > 0) {
+                    exitMortgagePayments = refinanceAmount * (monthlyRate * Math.pow(1 + monthlyRate, numberOfPayments)) / 
+                                         (Math.pow(1 + monthlyRate, numberOfPayments) - 1);
+                }
+            } else {
+                // Interest only
+                const monthlyRate = (refinanceInterestRate / 100) / 12;
+                exitMortgagePayments = refinanceAmount * monthlyRate;
+            }
+        }
+        
+        // Update Exit Strategy display fields
+        const exitLockedInEquityEl = document.getElementById(`${calculatorType}_exit_locked_in_equity`);
+        if (exitLockedInEquityEl) exitLockedInEquityEl.value = formatCurrency(lockedInEquity, 2);
+        
+        const exitMoneyLeftInEl = document.getElementById(`${calculatorType}_exit_money_left_in`);
+        if (exitMoneyLeftInEl) exitMoneyLeftInEl.value = formatCurrency(moneyLeftIn, 2);
+        
+        const exitIdealPurchasePriceEl = document.getElementById(`${calculatorType}_exit_ideal_purchase_price`);
+        if (exitIdealPurchasePriceEl) exitIdealPurchasePriceEl.value = formatCurrency(idealPurchasePrice, 2);
+        
+        const exitMortgagePaymentsEl = document.getElementById(`${calculatorType}_exit_mortgage_payments`);
+        if (exitMortgagePaymentsEl) exitMortgagePaymentsEl.value = formatCurrency(exitMortgagePayments, 2);
+    } else {
+        // Reset fields if no estimated market value
+        const exitLockedInEquityEl = document.getElementById(`${calculatorType}_exit_locked_in_equity`);
+        if (exitLockedInEquityEl) exitLockedInEquityEl.value = '£ 0';
+        
+        const exitMoneyLeftInEl = document.getElementById(`${calculatorType}_exit_money_left_in`);
+        if (exitMoneyLeftInEl) exitMoneyLeftInEl.value = '£ 0';
+        
+        const exitIdealPurchasePriceEl = document.getElementById(`${calculatorType}_exit_ideal_purchase_price`);
+        if (exitIdealPurchasePriceEl) exitIdealPurchasePriceEl.value = '£ 0';
+        
+        const exitMortgagePaymentsEl = document.getElementById(`${calculatorType}_exit_mortgage_payments`);
+        if (exitMortgagePaymentsEl) exitMortgagePaymentsEl.value = '£ 0';
+    }
 }
 
 function createBRRCalculator(calculatorType) {
