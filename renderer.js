@@ -2164,7 +2164,7 @@ function createSimpleBuyToLetCalculator(calculatorType) {
                 </div>
                 
                 <div class="pe-section">
-                    <h3 class="pe-section-title">Financing</h3>
+                    <h3 class="pe-section-title">Initial Financing</h3>
                     <div class="pe-field pe-field-inline">
                         <label class="pe-field-label">Type</label>
                         <div class="pe-financing-type-group">
@@ -2317,13 +2317,14 @@ function createSimpleBuyToLetCalculator(calculatorType) {
             </div>
             
             <div class="pe-calculator-right">
-                <div class="pe-section pe-field-detailed" style="display: none;">
-                    <h3 class="pe-section-title">Refinance</h3>
+                <input type="hidden" id="${calculatorType}_exit_strategy_hidden" value="refinance">
+                <div class="pe-section">
+                    <h3 class="pe-section-title">Exit Strategy</h3>
                     <div class="pe-field">
-                        <label class="pe-field-label">Estimated Market Value</label>
-                        <input type="text" class="pe-input" id="${calculatorType}_estimated_market_value" data-original-id="estimated_market_value" data-calculator="${calculatorType}" placeholder="£ 0">
+                        <label class="pe-field-label required">Estimated Market Value</label>
+                        <input type="text" class="pe-input" id="${calculatorType}_exit_estimated_market_value" data-original-id="exit_estimated_market_value" data-calculator="${calculatorType}" placeholder="Required">
                     </div>
-                    <div class="pe-field">
+                    <div class="pe-field pe-field-detailed" style="display: none;">
                         <label class="pe-field-label">Mortgage Set-up Fee</label>
                         <div class="pe-field-with-action">
                             <input type="text" class="pe-input" id="${calculatorType}_refinance_setup_fee" data-original-id="refinance_setup_fee" data-calculator="${calculatorType}" value="£ 0">
@@ -2333,11 +2334,11 @@ function createSimpleBuyToLetCalculator(calculatorType) {
                             </div>
                         </div>
                     </div>
-                    <div class="pe-field">
+                    <div class="pe-field pe-field-detailed" style="display: none;">
                         <label class="pe-field-label">Mortgage Loan to Value</label>
                         <input type="text" class="pe-input" id="${calculatorType}_refinance_ltv" data-original-id="refinance_ltv" data-calculator="${calculatorType}" value="75 %">
                     </div>
-                    <div class="pe-field pe-field-inline">
+                    <div class="pe-field pe-field-detailed pe-field-inline" style="display: none;">
                         <label class="pe-field-label">Mortgage Type</label>
                         <div class="pe-financing-type-group">
                             <button type="button" class="pe-financing-type pe-financing-type-active" data-refinance-mortgage-type="interest_only" data-calculator="${calculatorType}">
@@ -2352,30 +2353,30 @@ function createSimpleBuyToLetCalculator(calculatorType) {
                     </div>
                     <div class="pe-field">
                         <label class="pe-field-label">Mortgage Payments / pcm</label>
-                        <input type="text" class="pe-input" id="${calculatorType}_refinance_mortgage_payments" value="£ 0" readonly>
+                        <input type="text" class="pe-input" id="${calculatorType}_exit_mortgage_payments" value="£ 0" readonly>
                     </div>
-                    <div class="pe-field">
+                    <div class="pe-field pe-field-detailed" style="display: none;">
                         <label class="pe-field-label">Mortgage Interest Rate (APR)</label>
                         <input type="text" class="pe-input" id="${calculatorType}_refinance_interest_rate" data-original-id="refinance_interest_rate" data-calculator="${calculatorType}" placeholder="5.5 %">
                     </div>
-                    <div class="pe-field pe-field-refinance-repayment" style="display: none;">
+                    <div class="pe-field pe-field-detailed pe-field-refinance-repayment" style="display: none;">
                         <label class="pe-field-label">Mortgage Term (Years)</label>
                         <input type="text" class="pe-input" id="${calculatorType}_refinance_mortgage_term_years" data-original-id="refinance_mortgage_term_years" data-calculator="${calculatorType}" value="25">
                     </div>
                     <div class="pe-field">
                         <label class="pe-field-label">Locked In Equity</label>
-                        <input type="text" class="pe-input" id="${calculatorType}_locked_in_equity" value="£ 0" readonly>
+                        <input type="text" class="pe-input" id="${calculatorType}_exit_locked_in_equity" value="£ 0" readonly>
                     </div>
                     <div class="pe-field">
                         <label class="pe-field-label">Money Left In</label>
-                        <input type="text" class="pe-input" id="${calculatorType}_money_left_in" value="£ 0" readonly>
+                        <input type="text" class="pe-input" id="${calculatorType}_exit_money_left_in" value="£ 0" readonly>
                     </div>
                     <div class="pe-field">
                         <label class="pe-field-label">Ideal Purchase Price (max)</label>
-                        <input type="text" class="pe-input" id="${calculatorType}_ideal_purchase_price" value="£ 0" readonly>
+                        <input type="text" class="pe-input" id="${calculatorType}_exit_ideal_purchase_price" value="£ 0" readonly>
                     </div>
-                    <div id="${calculatorType}_additional_refinance_costs"></div>
-                    <a href="#" class="pe-link-add" id="${calculatorType}_add_refinance_cost">+ Add additional refinance cost</a>
+                    <div id="${calculatorType}_additional_exit_refinance_costs"></div>
+                    <a href="#" class="pe-link-add" id="${calculatorType}_add_exit_refinance_cost">+ Add additional refinance cost</a>
                 </div>
                 
                 <div class="pe-section">
@@ -2392,7 +2393,7 @@ function createSimpleBuyToLetCalculator(calculatorType) {
                 
                 <div class="pe-section pe-field-detailed" style="display: none;">
                     <h3 class="pe-section-title">Ongoing Costs</h3>
-                    <div class="pe-subsection">
+                    <div class="pe-subsection" style="border-top: none; padding-top: 0; margin-top: 0;">
                         <h4 class="pe-subsection-title">Annual Expenses</h4>
                         <div class="pe-field">
                             <label class="pe-field-label">% of Income on Maintenance</label>
@@ -2967,6 +2968,51 @@ function setupSimpleBuyToLetCalculatorEvents(section, calculatorType) {
             if (financingPaymentField) financingPaymentField.style.display = 'none';
         }
     };
+    
+    // Add additional exit refinance cost functionality
+    const addExitRefinanceCostLink = section.querySelector(`#${calculatorType}_add_exit_refinance_cost`);
+    const additionalExitCostsContainer = section.querySelector(`#${calculatorType}_additional_exit_refinance_costs`);
+    let exitRefinanceCostCounter = 0;
+    
+    if (addExitRefinanceCostLink && additionalExitCostsContainer) {
+        addExitRefinanceCostLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            exitRefinanceCostCounter++;
+            const costId = `${calculatorType}_additional_exit_refinance_cost_${exitRefinanceCostCounter}`;
+            
+            const costField = document.createElement('div');
+            costField.className = 'pe-field';
+            costField.innerHTML = `
+                <label class="pe-field-label">Additional Refinance Cost ${exitRefinanceCostCounter}</label>
+                <div class="pe-field-with-action">
+                    <input type="text" class="pe-input" id="${costId}" data-original-id="additional_exit_refinance_cost_${exitRefinanceCostCounter}" data-calculator="${calculatorType}" value="£ 0" placeholder="£ 0">
+                    <button type="button" class="pe-btn-remove" data-cost-id="${costId}">×</button>
+                </div>
+            `;
+            
+            additionalExitCostsContainer.appendChild(costField);
+            
+            // Add event listener for the input
+            const input = costField.querySelector(`#${costId}`);
+            if (input) {
+                input.addEventListener('input', () => {
+                    calculateSimpleBuyToLetValues(calculatorType);
+                });
+                input.addEventListener('change', () => {
+                    calculateSimpleBuyToLetValues(calculatorType);
+                });
+            }
+            
+            // Add event listener for remove button
+            const removeBtn = costField.querySelector('.pe-btn-remove');
+            if (removeBtn) {
+                removeBtn.addEventListener('click', () => {
+                    costField.remove();
+                    calculateSimpleBuyToLetValues(calculatorType);
+                });
+            }
+        });
+    }
     
     // Initialize fields on load
     initializeFinancingFields();
